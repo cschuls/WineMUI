@@ -20,6 +20,28 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+/*******************************************************************************/
+/* Modification and Enhancement Narrative                                      */
+/*                                                                             */
+/* Craig Schulstad - Horace, ND, USA (6 July, 2020)                            */
+/*                                                                             */
+/* This program has been revised to reactively acquire a MUI file reference to */
+/* be used by the various resource fetch functions.  Without these code        */
+/* changes, no MUI reference was found and the calling program was falling     */
+/* back to the exe file for information.                                       */
+/*                                                                             */
+/* The following function call was added:                                      */
+/*   GetMUI (Attempts to locate and retrieve an MUI file)                      */
+/*                                                                             */
+/* The following function(s) were modified:                                    */
+/*   LoadResource                                                              */
+/*   FindResoureExW                                                            */
+/*                                                                             */
+/* NOTE - you may need to add a language environment to the Linux environment  */
+/* set (e.g. LANGUAGE=en_US) or your program may crash!                        */
+/*                                                                             */
+/*******************************************************************************/
+
 #include <stdarg.h>
 
 #define NONAMELESSUNION
@@ -36,6 +58,10 @@
 #include "wine/debug.h"
 #include "wine/exception.h"
 
+/* MUI Start */
+#include <stdlib.h>
+/* MUI End   */
+
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 
 
@@ -48,11 +74,216 @@ struct exclusive_datafile
 };
 static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list );
 
+/* MUI Start */
+static WCHAR wszMUILocale[10];
+static BOOL bGotLocale = 0;   
+/* MUI End   */
 
 /***********************************************************************
  * Modules
  ***********************************************************************/
 
+/* MUI Start */
+
+/***********************************************************************/
+/* GetMUI - Acquire an MUI for the associated resource                 */
+/***********************************************************************/
+
+HMODULE GetMUI(HMODULE module)
+
+{                 
+
+    HMODULE hMUI = NULL;
+
+    LCID dwMUILCID;
+
+    WCHAR wszModuleName[MAX_PATH];
+    WCHAR wszMUIName[MAX_PATH];
+    WCHAR wszExeTest[5] = {'.', 'e', 'x', 'e', 0};
+
+    INT i;
+    INT j;
+    INT k;
+    INT l;
+
+    /* Could not get the GetDefaultUserLocale function to work so added this temporary "switch/case" set to test a subset of the more prevalent languages.*/
+    /* If someone can figure out how to get that function to work within this code block, it can replace the "switch/case" block of code.                 */
+
+    /* If you know the language ID you want to use, you can make that test the first one in the switch/case set so that it returns the required result    */
+    /* immediately.                                                                                                                                       */
+
+    if (!(bGotLocale)) {
+
+	dwMUILCID = GetUserDefaultLCID();
+
+	switch(dwMUILCID) {
+
+	    case 1033:
+		wcscpy(wszMUILocale, L"en-US"); /* United States English */
+		break;
+
+	    case 1029:
+		wcscpy(wszMUILocale, L"cs-CZ");
+		break;
+
+	    case 1030:
+		wcscpy(wszMUILocale, L"da-DK");
+		break;
+
+	    case 1031:
+		wcscpy(wszMUILocale, L"de-DE");
+		break;
+
+	    case 1032:
+		wcscpy(wszMUILocale, L"el-GR");
+		break;
+
+	    case 1035:
+		wcscpy(wszMUILocale, L"fi-FI");
+		break;
+
+	    case 1036:
+		wcscpy(wszMUILocale, L"fr-FR");
+		break;
+
+	    case 1037:
+		wcscpy(wszMUILocale, L"he-IL");
+		break;
+
+	    case 1038:
+		wcscpy(wszMUILocale, L"hu-HU");
+		break;
+
+	    case 1039:
+		wcscpy(wszMUILocale, L"is-IS");
+		break;
+
+	    case 1040:
+		wcscpy(wszMUILocale, L"it-IT");
+		break;
+
+	    case 1041:
+		wcscpy(wszMUILocale, L"ja-JP");
+		break;
+
+	    case 1042:
+		wcscpy(wszMUILocale, L"ko-KR");
+		break;
+
+	    case 1043:
+		wcscpy(wszMUILocale, L"nl-NL");
+		break;
+
+	    case 1044:
+		wcscpy(wszMUILocale, L"nb-NO");
+		break;
+
+	    case 1045:
+		wcscpy(wszMUILocale, L"pl-PL");
+		break;
+
+	    case 1046:
+		wcscpy(wszMUILocale, L"pt-BR");
+		break;
+
+	    case 1053:
+		wcscpy(wszMUILocale, L"sv-SE");
+		break;
+
+	    case 2057:
+		wcscpy(wszMUILocale, L"en-GB");
+		break;
+
+	    default:
+		wcscpy(wszMUILocale, L"en-US");
+		break;
+
+	}
+
+	bGotLocale = 1;
+
+    }
+
+    /* Initialize the work strings */
+
+    for (i = 0; i < MAX_PATH; i++) {
+	wszModuleName[i] = 0;
+	wszMUIName[i] = 0;
+    }   
+
+    /* Note - the reference to the Windows file name for a "MUI" file has a structure such as "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in   */
+    /* testing out the usage of the "GetModuleFileNameW" function, it was determined that it works with a relative Linux file structure such as "xx-XX/Application.exe.mui".    */
+
+    /* Acquire the base resource file name */
+
+    j = GetModuleFileNameW(module, wszModuleName, MAX_PATH);
+
+    if (j == 0) return module;
+
+    /* For now, this program patch will only attempt to locate "MUI" files for executable files and not "dll" files. */
+
+    if (!(wcsstr(wszModuleName, wszExeTest))) return module;
+
+    /* Locate the position of the final backslash in the retrieved executable file. */
+
+    for (i = 0; i < MAX_PATH; i++) {
+	if (wszModuleName[i] == 0) break;
+
+	if (wszModuleName[i] == 92) j = i;
+    }
+
+    /* Set up the work index that will be used to extract just the executable file from the fully qualified file name. */
+
+    k = 0;
+
+    for (i = 0; i < MAX_PATH; i++) {
+	if (wszModuleName[i] == 0) break;
+
+	/* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will be copied to the "MUI" file reference. */
+
+	if (j < 0) {
+	    wszMUIName[k] = wszModuleName[i];
+	    k++;
+	}
+
+	/* When the position of the final backslash has been reached, add the locale name as the folder/directory containing the "MUI" file and reset work index "j" to -1. */
+
+	if (i >= j && j > 0) {
+	    for (l = 0; l < 5; l++) {
+		wszMUIName[k] = wszMUILocale[l];
+		k++;
+	    }
+	    wszMUIName[k] = 47;
+	    k++;
+	    j = -1;
+	}
+    }
+
+    /* Finally, append the literal ".mui" onto the file reference. */
+
+    wszMUIName[k] = 46;
+    k++;
+    wszMUIName[k] = 109;
+    k++;
+    wszMUIName[k] = 117;
+    k++;
+    wszMUIName[k] = 105;
+
+    /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
+
+    hMUI = LoadLibraryW(wszMUIName);
+
+    if (hMUI) {
+	return hMUI;
+    } else {
+	return module;
+    }
+
+    return module;
+
+}
+
+/* MUI End   */
 
 /******************************************************************
  *      get_proc_address
@@ -1021,10 +1252,36 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     UNICODE_STRING nameW, typeW;
     LDR_RESOURCE_INFO info;
     const IMAGE_RESOURCE_DATA_ENTRY *entry = NULL;
+    
+    /* MUI Start */
+    CHAR szResourceType[200];
+    /* MUI End   */
 
     TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
 
     if (!module) module = GetModuleHandleW( 0 );
+    
+    /* MUI Start */
+
+    /* The assumption here is that a check for resources in an MUI file need to be done for any of the   */
+    /* resources that are not a bitmap such as:                                                          */
+    /*                                                                                                   */
+    /*   Accelerators                                                                                    */
+    /*   Dialogs                                                                                         */
+    /*   Menus                                                                                           */
+    /*   Strings                                                                                         */
+    /*                                                                                                   */
+    /* Other resources such as icons and bitmaps will normally be stored in the executable file, so      */
+    /* this enhancement will not attempt to divert the resource search to the MUI file.                  */
+
+    sprintf(szResourceType, "%s", debugstr_w(type));       
+
+    if ((strcmp(szResourceType, "#00ff") <= 0)) {
+	module = GetMUI(module);
+    }
+
+    /* MUI End   */
+    
     nameW.Buffer = typeW.Buffer = NULL;
 
     __TRY
@@ -1074,11 +1331,41 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
 HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 {
     void *ret;
+    
+    /* MUI Start */
 
+    /* During various test runs anecdotal evidence seemed to indicate that resources such as bitmaps and */
+    /* icons generated a value in the range of 0x010D5150 to 0x010D7860 (17650000 to 17660000) or had    */
+    /* values greater than 0x0BEBC200 (200000000).  I am not sure if this is a reliable assignment       */
+    /* convention, but in testing, that logic appeared to work.  So until a proper algorithm is in place */
+    /* to traverse from an executable file to its corresponding MUI file to acquire a resource, this     */
+    /* method probably will work for most scenarios.                                                     */
+
+    CHAR szResourceHandle[16];
+    LONG lResource;
+
+    /* Convert the resource handle value to an integer for subsequent range testing prior to invoking    */
+    /* the MUI fetch function.                                                                           */
+
+    sprintf(szResourceHandle, "%p", rsrc);
+    lResource = strtol(szResourceHandle, NULL, 16);
+
+    /* MUI End   */
+    
     TRACE( "%p %p\n", module, rsrc );
 
     if (!rsrc) return 0;
     if (!module) module = GetModuleHandleW( 0 );
+    
+    /* MUI Start */
+
+    /* Only check for an MUI reference for a select set of ranges of resource handle values.             */
+    
+    if (((lResource <= 17650000) || (lResource >= 17660001)) && (lResource <= 200000000)) {
+	module = GetMUI((HMODULE)module);
+    }
+    /* MUI End   */
+    
     if (!set_ntstatus( LdrAccessResource( module, (IMAGE_RESOURCE_DATA_ENTRY *)rsrc, &ret, NULL )))
         return 0;
     return ret;
