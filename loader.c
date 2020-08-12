@@ -23,7 +23,7 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (6 July, 2020)                            */
+/* Craig Schulstad - Horace, ND, USA (11 August, 2020)                         */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
@@ -82,7 +82,6 @@ static BOOL bGotLocale = 0;
 /***********************************************************************
  * Modules
  ***********************************************************************/
-
 /* MUI Start */
 
 /***********************************************************************/
@@ -107,7 +106,7 @@ HMODULE GetMUI(HMODULE module)
     INT l;
 
     /* Could not get the GetDefaultUserLocale function to work so added this temporary "switch/case" set to test a subset of the more prevalent languages.*/
-    /* If someone can figure out how to get that function to work within this code block, it can replace the "switch/case" block of code.                 */
+    /* If someone can figure out how to get that function to work within this code block, that function can replace the "switch/case" block of code.      */
 
     /* If you know the language ID you want to use, you can make that test the first one in the switch/case set so that it returns the required result    */
     /* immediately.                                                                                                                                       */
@@ -1252,15 +1251,17 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     UNICODE_STRING nameW, typeW;
     LDR_RESOURCE_INFO info;
     const IMAGE_RESOURCE_DATA_ENTRY *entry = NULL;
-    
+
     /* MUI Start */
+
     CHAR szResourceType[200];
+
     /* MUI End   */
 
     TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
 
     if (!module) module = GetModuleHandleW( 0 );
-    
+
     /* MUI Start */
 
     /* The assumption here is that a check for resources in an MUI file needs to be done for any of the  */
@@ -1271,12 +1272,16 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     sprintf(szResourceType, "%s", debugstr_w(type));       
 
-    if ((strcmp(szResourceType, "#0018") <= 0)) {
+    if ((strcmp(szResourceType, "#0018") <= 0) &&  (strcmp(szResourceType, "#000e") != 0) && (strcmp(szResourceType, "#0016") != 0) && (strcmp(szResourceType, "#0003") != 0)) {
 	module = GetMUI(module);
+    } else {
+	if ((strcmp(szResourceType, "#0018") <= 0)) {
+	    WINE_FIXME("Module: %p, Type: %s, Name: %s \n", module, debugstr_w(type), debugstr_w(name));
+	}
     }
 
     /* MUI End   */
-    
+
     nameW.Buffer = typeW.Buffer = NULL;
 
     __TRY
@@ -1298,6 +1303,9 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     if (!IS_INTRESOURCE(nameW.Buffer)) HeapFree( GetProcessHeap(), 0, nameW.Buffer );
     if (!IS_INTRESOURCE(typeW.Buffer)) HeapFree( GetProcessHeap(), 0, typeW.Buffer );
+
+    if (((HRSRC)entry)) WINE_FIXME("Module: %p, Type: %s, Name: %s, Resource Handle: %p \n", module, debugstr_w(type), debugstr_w(name), (HRSRC)entry);
+
     return (HRSRC)entry;
 }
 
@@ -1326,13 +1334,13 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
 HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 {
     void *ret;
-    
+
     /* MUI Start */
 
     /* During various test runs, anecdotal evidence seemed to indicate that resources needing to access  */
     /* an MUI file had a module value in the range of 0x00D00000 to 0x00DFFFFF (13631488 to to 14680063) */
     /* and resource handle values in the same range.  This range may be attributed to the memory size    */
-    /* and other system parameters on the test system, so possibly before utilizing this range test on   */
+    /* and other system parameters on the test system, so possibley before utilizing this range test on  */
     /* another system, the values being assigned for the MUI module and the resource handle may need to  */
     /* sampled on the system where this modified program is being installed and then the range adjusted  */
     /* as needed.  As an alternative, the module and resource handle range tests can be omitted if the   */
@@ -1347,20 +1355,22 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     LONG lInstance;
     LONG lModule;
 
-    HMODULE hInstance;                                                                  
+    HMODULE hInstance;
+
+    WINE_FIXME("Module begin: %p, Resource: %p \n", module, rsrc);
 
     /* Acquire the instance which will be used to test if the base executable module handle is the      */
-    /* input parameter                                                                                  */
+    /* input parameter.                                                                                 */
 
     hInstance = GetModuleHandleW( 0 );
 
     /* MUI End   */
-    
+
     TRACE( "%p %p\n", module, rsrc );
 
     if (!rsrc) return 0;
     if (!module) module = GetModuleHandleW( 0 );
-    
+
     /* MUI Start */
 
     /* Only check for an MUI reference for a select set of ranges of resource handle values.             */
@@ -1376,11 +1386,11 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     if (lInstance == lModule) {
 	if ((lResource >= 13631488) && (lResource <= 14680063)) {
 	    module = GetMUI((HMODULE)module);
-	}
+	} 
     }
 
     /* MUI End   */
-    
+
     if (!set_ntstatus( LdrAccessResource( module, (IMAGE_RESOURCE_DATA_ENTRY *)rsrc, &ret, NULL )))
         return 0;
     return ret;
