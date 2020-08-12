@@ -23,7 +23,7 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (11 August, 2020)                         */
+/* Craig Schulstad - Horace, ND, USA 12 August, 2020)                          */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
@@ -106,7 +106,7 @@ HMODULE GetMUI(HMODULE module)
     INT l;
 
     /* Could not get the GetDefaultUserLocale function to work so added this temporary "switch/case" set to test a subset of the more prevalent languages.*/
-    /* If someone can figure out how to get that function to work within this code block, that function can replace the "switch/case" block of code.      */
+    /* If someone can figure out how to get that function to work within this code block, it can replace the "switch/case" block of code.                 */
 
     /* If you know the language ID you want to use, you can make that test the first one in the switch/case set so that it returns the required result    */
     /* immediately.                                                                                                                                       */
@@ -1274,11 +1274,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     if ((strcmp(szResourceType, "#0018") <= 0) &&  (strcmp(szResourceType, "#000e") != 0) && (strcmp(szResourceType, "#0016") != 0) && (strcmp(szResourceType, "#0003") != 0)) {
 	module = GetMUI(module);
-    } else {
-	if ((strcmp(szResourceType, "#0018") <= 0)) {
-	    WINE_FIXME("Module: %p, Type: %s, Name: %s \n", module, debugstr_w(type), debugstr_w(name));
-	}
-    }
+    } 
 
     /* MUI End   */
 
@@ -1303,8 +1299,6 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     if (!IS_INTRESOURCE(nameW.Buffer)) HeapFree( GetProcessHeap(), 0, nameW.Buffer );
     if (!IS_INTRESOURCE(typeW.Buffer)) HeapFree( GetProcessHeap(), 0, typeW.Buffer );
-
-    if (((HRSRC)entry)) WINE_FIXME("Module: %p, Type: %s, Name: %s, Resource Handle: %p \n", module, debugstr_w(type), debugstr_w(name), (HRSRC)entry);
 
     return (HRSRC)entry;
 }
@@ -1356,8 +1350,6 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     LONG lModule;
 
     HMODULE hInstance;
-
-    WINE_FIXME("Module begin: %p, Resource: %p \n", module, rsrc);
 
     /* Acquire the instance which will be used to test if the base executable module handle is the      */
     /* input parameter.                                                                                 */
