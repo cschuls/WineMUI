@@ -23,7 +23,7 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA 12 August, 2020)                          */
+/* Craig Schulstad - Horace, ND, USA (15 August, 2020)                         */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
@@ -75,8 +75,9 @@ struct exclusive_datafile
 static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list );
 
 /* MUI Start */
-static WCHAR wszMUILocale[10];
-static BOOL bGotLocale = 0;   
+static WCHAR wszMUILocale[LOCALE_NAME_MAX_LENGTH];
+static BOOL bGotLocale = 0;
+static BOOL bRecursive = 0;   
 /* MUI End   */
 
 /***********************************************************************
@@ -94,8 +95,6 @@ HMODULE GetMUI(HMODULE module)
 
     HMODULE hMUI = NULL;
 
-    LCID dwMUILCID;
-
     WCHAR wszModuleName[MAX_PATH];
     WCHAR wszMUIName[MAX_PATH];
     WCHAR wszExeTest[5] = {'.', 'e', 'x', 'e', 0};
@@ -105,99 +104,19 @@ HMODULE GetMUI(HMODULE module)
     INT k;
     INT l;
 
-    /* Could not get the GetDefaultUserLocale function to work so added this temporary "switch/case" set to test a subset of the more prevalent languages.*/
-    /* If someone can figure out how to get that function to work within this code block, it can replace the "switch/case" block of code.                 */
-
-    /* If you know the language ID you want to use, you can make that test the first one in the switch/case set so that it returns the required result    */
-    /* immediately.                                                                                                                                       */
+    /* Acquire the locale name using GetUserDefaultLocaleName.  Since this function utilizes the FindResourceExW function, this sets up a recursive call  */
+    /* to this function.  In order to avoid a stack overflow condition that would be caused by repeated calls, a flag will be set on to return back to    */
+    /* the FindResourceExW function without again calling the locale acquisition function.                                                                */
 
     if (!(bGotLocale)) {
 
-	dwMUILCID = GetUserDefaultLCID();
+	if (bRecursive) return module;
 
-	switch(dwMUILCID) {
+	bRecursive = 1;
 
-	    case 1033:
-		wcscpy(wszMUILocale, L"en-US"); /* United States English */
-		break;
+	GetUserDefaultLocaleName(wszMUILocale, LOCALE_NAME_MAX_LENGTH);
 
-	    case 1029:
-		wcscpy(wszMUILocale, L"cs-CZ");
-		break;
-
-	    case 1030:
-		wcscpy(wszMUILocale, L"da-DK");
-		break;
-
-	    case 1031:
-		wcscpy(wszMUILocale, L"de-DE");
-		break;
-
-	    case 1032:
-		wcscpy(wszMUILocale, L"el-GR");
-		break;
-
-	    case 1035:
-		wcscpy(wszMUILocale, L"fi-FI");
-		break;
-
-	    case 1036:
-		wcscpy(wszMUILocale, L"fr-FR");
-		break;
-
-	    case 1037:
-		wcscpy(wszMUILocale, L"he-IL");
-		break;
-
-	    case 1038:
-		wcscpy(wszMUILocale, L"hu-HU");
-		break;
-
-	    case 1039:
-		wcscpy(wszMUILocale, L"is-IS");
-		break;
-
-	    case 1040:
-		wcscpy(wszMUILocale, L"it-IT");
-		break;
-
-	    case 1041:
-		wcscpy(wszMUILocale, L"ja-JP");
-		break;
-
-	    case 1042:
-		wcscpy(wszMUILocale, L"ko-KR");
-		break;
-
-	    case 1043:
-		wcscpy(wszMUILocale, L"nl-NL");
-		break;
-
-	    case 1044:
-		wcscpy(wszMUILocale, L"nb-NO");
-		break;
-
-	    case 1045:
-		wcscpy(wszMUILocale, L"pl-PL");
-		break;
-
-	    case 1046:
-		wcscpy(wszMUILocale, L"pt-BR");
-		break;
-
-	    case 1053:
-		wcscpy(wszMUILocale, L"sv-SE");
-		break;
-
-	    case 2057:
-		wcscpy(wszMUILocale, L"en-GB");
-		break;
-
-	    default:
-		wcscpy(wszMUILocale, L"en-US");
-		break;
-
-	}
+	bRecursive = 0;
 
 	bGotLocale = 1;
 
