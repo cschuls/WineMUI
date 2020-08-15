@@ -1261,12 +1261,8 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     /* to work.                                                                                          */
 
     CHAR szResourceHandle[16];
-    CHAR szInstance[16];
-    CHAR szModule[16];
 
     LONG lResource;
-    LONG lInstance;
-    LONG lModule;
 
     HMODULE hInstance;
 
@@ -1286,15 +1282,10 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
     /* Only check for an MUI reference for a select set of ranges of resource handle values.             */
 
-    sprintf(szInstance, "%p", hInstance);
-    sprintf(szModule, "%p", module);
     sprintf(szResourceHandle, "%p", rsrc);
-
-    lInstance = strtol(szInstance, NULL, 16);
-    lModule = strtol(szModule, NULL, 16);   
     lResource = strtol(szResourceHandle, NULL, 16);
     
-    if (lInstance == lModule) {
+    if (hInstance == module) {
 	if ((lResource >= 13631488) && (lResource <= 14680063)) {
 	    module = GetMUI((HMODULE)module);
 	} 
