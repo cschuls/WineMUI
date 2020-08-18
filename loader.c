@@ -23,7 +23,7 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (15 August, 2020)                         */
+/* Craig Schulstad - Horace, ND, USA (18 August, 2020)                         */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
@@ -75,14 +75,15 @@ struct exclusive_datafile
 static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list );
 
 /* MUI Start */
-static WCHAR wszMUILocale[LOCALE_NAME_MAX_LENGTH];
-static BOOL bGotLocale = 0;
-static BOOL bRecursive = 0;   
+static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH];
+static BOOL locale_found = 0;
+static BOOL recursion_flag = 0;   
 /* MUI End   */
 
 /***********************************************************************
  * Modules
  ***********************************************************************/
+
 /* MUI Start */
 
 /***********************************************************************/
@@ -93,61 +94,64 @@ HMODULE GetMUI(HMODULE module)
 
 {                 
 
-    HMODULE hMUI = NULL;
+    HMODULE mui_module = NULL;
 
-    WCHAR wszModuleName[MAX_PATH];
-    WCHAR wszMUIName[MAX_PATH];
-    WCHAR wszExeTest[5] = {'.', 'e', 'x', 'e', 0};
+    WCHAR module_name[MAX_PATH];
+    WCHAR mui_name[MAX_PATH];
+    WCHAR exe_suffix[5] = {'.', 'e', 'x', 'e', 0};
 
     INT i;
     INT j;
     INT k;
     INT l;
 
-    /* Acquire the locale name using GetUserDefaultLocaleName.  Since this function utilizes the FindResourceExW function, this sets up a recursive call  */
-    /* to this function.  In order to avoid a stack overflow condition that would be caused by repeated calls, a flag will be set on to return back to    */
-    /* the FindResourceExW function without again calling the locale acquisition function.                                                                */
+    /* Acquire the locale name using GetUserDefaultLocaleName.  Since this function utilizes the FindResourceExW function, */
+    /* this sets up a recursive call to this function.  In order to avoid a stack overflow condition that would be caused  */
+    /* by repeated calls, a flag will be set on to return back to the FindResourceExW function without again calling the   */
+    /* locale acquisition function. */
 
-    if (!(bGotLocale)) {
+    if (!(locale_found)) {
 
-	if (bRecursive) return module;
+        if (recursion_flag) return module;
 
-	bRecursive = 1;
+        recursion_flag = 1;
 
-	GetUserDefaultLocaleName(wszMUILocale, LOCALE_NAME_MAX_LENGTH);
+        GetUserDefaultLocaleName(mui_locale, LOCALE_NAME_MAX_LENGTH);
 
-	bRecursive = 0;
+        recursion_flag = 0;
 
-	bGotLocale = 1;
+        locale_found = 1;
 
     }
 
     /* Initialize the work strings */
 
     for (i = 0; i < MAX_PATH; i++) {
-	wszModuleName[i] = 0;
-	wszMUIName[i] = 0;
+        module_name[i] = 0;
+        mui_name[i] = 0;
     }   
 
-    /* Note - the reference to the Windows file name for a "MUI" file has a structure such as "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in   */
-    /* testing out the usage of the "GetModuleFileNameW" function, it was determined that it works with a relative Linux file structure such as "xx-XX/Application.exe.mui".    */
+    /* Note - the reference to the Windows file name for a "MUI" file has a structure such as    */
+    /* "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in testing   */
+    /* out the usage of the "GetModuleFileNameW" function, it was determined that it works with  */
+    /* a relative Linux file structure such as "xx-XX/Application.exe.mui". */
 
     /* Acquire the base resource file name */
 
-    j = GetModuleFileNameW(module, wszModuleName, MAX_PATH);
+    j = GetModuleFileNameW(module, module_name, MAX_PATH);
 
     if (j == 0) return module;
 
     /* For now, this program patch will only attempt to locate "MUI" files for executable files and not "dll" files. */
 
-    if (!(wcsstr(wszModuleName, wszExeTest))) return module;
+    if (!(wcsstr(module_name, exe_suffix))) return module;
 
     /* Locate the position of the final backslash in the retrieved executable file. */
 
     for (i = 0; i < MAX_PATH; i++) {
-	if (wszModuleName[i] == 0) break;
+        if (module_name[i] == 0) break;
 
-	if (wszModuleName[i] == 92) j = i;
+        if (module_name[i] == 92) j = i;
     }
 
     /* Set up the work index that will be used to extract just the executable file from the fully qualified file name. */
@@ -155,46 +159,48 @@ HMODULE GetMUI(HMODULE module)
     k = 0;
 
     for (i = 0; i < MAX_PATH; i++) {
-	if (wszModuleName[i] == 0) break;
+        if (module_name[i] == 0) break;
 
-	/* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will be copied to the "MUI" file reference. */
+        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will */
+        /* be copied to the "MUI" file reference. */
 
-	if (j < 0) {
-	    wszMUIName[k] = wszModuleName[i];
-	    k++;
-	}
+        if (j < 0) {
+            mui_name[k] = module_name[i];
+            k++;
+        }
 
-	/* When the position of the final backslash has been reached, add the locale name as the folder/directory containing the "MUI" file and reset work index "j" to -1. */
+        /* When the position of the final backslash has been reached, add the locale name as the folder/directory      */
+        /* containing the "MUI" file and reset work index "j" to -1. */
 
-	if (i >= j && j > 0) {
-	    for (l = 0; l < 5; l++) {
-		wszMUIName[k] = wszMUILocale[l];
-		k++;
-	    }
-	    wszMUIName[k] = 47;
-	    k++;
-	    j = -1;
-	}
+        if (i >= j && j > 0) {
+            for (l = 0; l < 5; l++) {
+                mui_name[k] = mui_locale[l];
+                k++;
+            }
+            mui_name[k] = 47;
+            k++;
+            j = -1;
+        }
     }
 
     /* Finally, append the literal ".mui" onto the file reference. */
 
-    wszMUIName[k] = 46;
+    mui_name[k] = 46;
     k++;
-    wszMUIName[k] = 109;
+    mui_name[k] = 109;
     k++;
-    wszMUIName[k] = 117;
+    mui_name[k] = 117;
     k++;
-    wszMUIName[k] = 105;
+    mui_name[k] = 105;
 
     /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
 
-    hMUI = LoadLibraryW(wszMUIName);
+    mui_module = LoadLibraryW(mui_name);
 
-    if (hMUI) {
-	return hMUI;
+    if (mui_module) {
+        return mui_module;
     } else {
-	return module;
+        return module;
     }
 
     return module;
@@ -1173,7 +1179,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     /* MUI Start */
 
-    CHAR szResourceType[200];
+    CHAR resource_type[200];
 
     /* MUI End   */
 
@@ -1189,10 +1195,10 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     /* Other resources such as bitmaps will normally be stored in the executable file, so this           */
     /* enhancement will not attempt to divert the resource search to the MUI file.                       */
 
-    sprintf(szResourceType, "%s", debugstr_w(type));       
+    sprintf(resource_type, "%s", debugstr_w(type));       
 
-    if ((strcmp(szResourceType, "#0018") <= 0) &&  (strcmp(szResourceType, "#000e") != 0) && (strcmp(szResourceType, "#0016") != 0) && (strcmp(szResourceType, "#0003") != 0)) {
-	module = GetMUI(module);
+    if ((strcmp(resource_type, "#0018") <= 0) &&  (strcmp(resource_type, "#000e") != 0) && (strcmp(resource_type, "#0016") != 0) && (strcmp(resource_type, "#0003") != 0)) {
+         module = GetMUI(module);
     } 
 
     /* MUI End   */
@@ -1218,7 +1224,6 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     if (!IS_INTRESOURCE(nameW.Buffer)) HeapFree( GetProcessHeap(), 0, nameW.Buffer );
     if (!IS_INTRESOURCE(typeW.Buffer)) HeapFree( GetProcessHeap(), 0, typeW.Buffer );
-
     return (HRSRC)entry;
 }
 
@@ -1260,16 +1265,16 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     /* language neutral resources stored in the executable file are not needed in order for the program  */
     /* to work.                                                                                          */
 
-    CHAR szResourceHandle[16];
+    CHAR resource_handle[16];
 
-    LONG lResource;
+    LONG resource_value;
 
-    HMODULE hInstance;
+    HMODULE process_instance;
 
     /* Acquire the instance which will be used to test if the base executable module handle is the      */
     /* input parameter.                                                                                 */
 
-    hInstance = GetModuleHandleW( 0 );
+    process_instance = GetModuleHandleW( 0 );
 
     /* MUI End   */
 
@@ -1282,13 +1287,13 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
     /* Only check for an MUI reference for a select set of ranges of resource handle values.             */
 
-    sprintf(szResourceHandle, "%p", rsrc);
-    lResource = strtol(szResourceHandle, NULL, 16);
+    sprintf(resource_handle, "%p", rsrc);
+    resource_value = strtol(resource_handle, NULL, 16);
     
-    if (hInstance == module) {
-	if ((lResource >= 13631488) && (lResource <= 14680063)) {
-	    module = GetMUI((HMODULE)module);
-	} 
+    if (process_instance == module) {
+        if ((resource_value >= 13631488) && (resource_value <= 14680063)) {
+            module = GetMUI((HMODULE)module);
+        } 
     }
 
     /* MUI End   */
