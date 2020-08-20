@@ -1177,12 +1177,6 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     LDR_RESOURCE_INFO info;
     const IMAGE_RESOURCE_DATA_ENTRY *entry = NULL;
 
-    /* MUI Start */
-
-    CHAR resource_type[200];
-
-    /* MUI End   */
-
     TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
 
     if (!module) module = GetModuleHandleW( 0 );
@@ -1196,11 +1190,9 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     /* of the application and is a tradeoff for being able to find and acquire the language specific     */
     /* resources in the MUI file.                                                                        */
 
-    sprintf(resource_type, "%s", debugstr_w(type));       
-
-    if ((strcmp(resource_type, "#0018") <= 0)) {
+    if (IS_INTRESOURCE(name)) {
          module = GetMUI(module);
-    } 
+    }
 
     /* MUI End   */
 
