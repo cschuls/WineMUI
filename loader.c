@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (21 August, 2020)                         */
+/* Craig Schulstad - Horace, ND, USA (21 August, 2020)                         */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
-/* The following function calls were added:                                    */
+/* The following function call was added:                                      */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
 /*   get_rsc (Relocation of the resource loader function call)                 */ 
 /*                                                                             */
@@ -152,7 +152,7 @@ HMODULE get_mui(HMODULE module)
     for (i = 0; i < MAX_PATH; i++) {
         if (module_name[i] == 0) break;
 
-        if (module_name[i] == 92) j = i;
+        if (module_name[i] == '\\') j = i;
     }
 
     /* Set up the work index that will be used to extract just the executable file from the fully qualified file name. */
@@ -178,7 +178,7 @@ HMODULE get_mui(HMODULE module)
                 mui_name[k] = mui_locale[l];
                 k++;
             }
-            mui_name[k] = 47;
+            mui_name[k] = '/';
             k++;
             j = -1;
         }
@@ -186,13 +186,13 @@ HMODULE get_mui(HMODULE module)
 
     /* Finally, append the literal ".mui" onto the file reference. */
 
-    mui_name[k] = 46;
+    mui_name[k] = '.';
     k++;
-    mui_name[k] = 109;
+    mui_name[k] = 'm';
     k++;
-    mui_name[k] = 117;
+    mui_name[k] = 'u';
     k++;
-    mui_name[k] = 105;
+    mui_name[k] = 'i';
 
     /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
 
