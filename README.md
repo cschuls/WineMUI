@@ -1,4 +1,4 @@
 # WineMUI
-Add rudimentary support to Wine to allow access to multi-language resource objects.
+Added rudimentary support to Wine to allow access to multi-language resource objects.
 
-Note that the code enhancements rely on testing for a range of resource module values and resource handle values.  For your system, you may need to debug the FindResourceExW function to see what ranges of module values are generated on your system and adjust the test range accordingly.  Alternatively, if the program (or programs) that you want to run with this rudimentary MUI support will function without the requirement of language neutral resources stored in the executable file, you may omit the resource range tests and just execute the GetMUI function within the LoadResource function.
+Having performed additional testing and receiving valuable feedback from the Wine community, I was able to utilize standard API's to acquire the locale code and to remove the need for resource handle range testing.  This has made the code changes more compact but at the same time providing comprehensive retrieval of resources both from the multi-language support file for language specific resources and from the executable file for language neutral resources.
