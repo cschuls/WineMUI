@@ -23,7 +23,7 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (21 August, 2020)                         */
+/* Craig Schulstad - Horace, ND, USA (30 August, 2020)                         */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
@@ -821,7 +821,6 @@ HRSRC get_rsc(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
 
 /* MUI End  */
 
-
 /**********************************************************************
  *	EnumResourceLanguagesExA	(kernelbase.@)
  */
@@ -1217,6 +1216,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
  */
 HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang )
 {
+    /* MUI Start */
+
     HRSRC rsrc;
 
     TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
@@ -1241,6 +1242,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
         return rsrc;
 
     }
+    /* MUI End   */
 
 }
 
@@ -1270,16 +1272,6 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 {
     void *ret;
 
-    /* MUI Start */
-
-    HMODULE process_instance;
-
-    /* Acquire the handle value for the executable file to test against the module value parameter.    */
-
-    process_instance = GetModuleHandleW( 0 );
-
-    /* MUI End   */
-
     TRACE( "%p %p\n", module, rsrc );
 
     if (!rsrc) return 0;
@@ -1287,13 +1279,10 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
     /* MUI Start */
 
-    /* Only check for an MUI reference if the module value is the same as the initial executable file, */
-    /* and that the resource handle maps to and address value less than the module.  That is the       */
-    /* signal that an MUI file exists for the executable file.                                         */
+    /* Only check for an MUI reference if the resource handle value is less than the module value. */
+    /* That is a signal that an MUI file exists for the executable file.                           */
     
-    if ((process_instance == module) && ((HMODULE)rsrc < module)) {
-        module = get_mui((HMODULE)module);
-    }
+    if (((HMODULE)rsrc < module)) module = get_mui((HMODULE)module);
 
     /* MUI End   */
 
