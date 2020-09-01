@@ -23,7 +23,7 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (30 August, 2020)                         */
+/* Craig Schulstad - Horace, ND, USA (1 September, 2020)                       */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
@@ -59,10 +59,6 @@
 #include "wine/debug.h"
 #include "wine/exception.h"
 
-/* MUI Start */
-#include <stdlib.h>
-/* MUI End   */
-
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 
 
@@ -88,7 +84,7 @@ static BOOL recursion_flag = 0;
 /* MUI Start */
 
 /***********************************************************************/
-/* get_mui - Acquire an MUI for the associated resource                 */
+/* get_mui - Acquire an MUI for the associated resource                */
 /***********************************************************************/
 
 HMODULE get_mui(HMODULE module)
@@ -162,15 +158,15 @@ HMODULE get_mui(HMODULE module)
     for (i = 0; i < MAX_PATH; i++) {
         if (module_name[i] == 0) break;
 
-        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will */
-        /* be copied to the "MUI" file reference. */
+        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached */
+        /* and will be copied to the "MUI" file reference. */
 
         if (j < 0) {
             mui_name[k] = module_name[i];
             k++;
         }
 
-        /* When the position of the final backslash has been reached, add the locale name as the folder/directory      */
+        /* When the position of the final backslash has been reached, add the locale name as the folder      */
         /* containing the "MUI" file and reset work index "j" to -1. */
 
         if (i >= j && j > 0) {
@@ -780,7 +776,7 @@ static NTSTATUS get_res_nameW( LPCWSTR name, UNICODE_STRING *str )
 /* MUI Start */
 
 /***********************************************************************/
-/* get_rsc - Isolated call of the LdrFindResource function              */
+/* get_rsc - Isolated call of the LdrFindResource function             */
 /***********************************************************************/
 
 HRSRC get_rsc(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
