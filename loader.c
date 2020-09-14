@@ -23,16 +23,16 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (1 September, 2020)                       */
+/* Craig Schulstad - Horace, ND, USA (14 September, 2020)                      */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
-/* The following function call was added:                                      */
+/* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
-/*   get_rsc (Relocation of the resource loader function call)                 */ 
+/*   get_res_handle (Relocation of the resource loader function call)          */
 /*                                                                             */
 /* The following function(s) were modified:                                    */
 /*   LoadResource   (Perform conditioned get_mui call)                         */
@@ -158,15 +158,15 @@ HMODULE get_mui(HMODULE module)
     for (i = 0; i < MAX_PATH; i++) {
         if (module_name[i] == 0) break;
 
-        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached */
-        /* and will be copied to the "MUI" file reference. */
+        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will */
+        /* be copied to the "MUI" file reference. */
 
         if (j < 0) {
             mui_name[k] = module_name[i];
             k++;
         }
 
-        /* When the position of the final backslash has been reached, add the locale name as the folder      */
+        /* When the position of the final backslash has been reached, add the locale name as the folder/directory      */
         /* containing the "MUI" file and reset work index "j" to -1. */
 
         if (i >= j && j > 0) {
@@ -192,7 +192,7 @@ HMODULE get_mui(HMODULE module)
 
     /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
 
-    mui_module = LoadLibraryW(mui_name);
+    mui_module = LoadLibraryExW(mui_name, 0, 0);
 
     if (mui_module) {
         return mui_module;
@@ -776,10 +776,10 @@ static NTSTATUS get_res_nameW( LPCWSTR name, UNICODE_STRING *str )
 /* MUI Start */
 
 /***********************************************************************/
-/* get_rsc - Isolated call of the LdrFindResource function             */
+/* get_res_handle - Isolated call of the LdrFindResource function      */
 /***********************************************************************/
 
-HRSRC get_rsc(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
+HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
 
 {
     NTSTATUS status;
@@ -1220,7 +1220,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     if (!module) module = GetModuleHandleW( 0 );
 
-    rsrc = get_rsc(module, type, name, lang);
+    rsrc = get_res_handle(module, type, name, lang);
 
     if (rsrc) { 
 
@@ -1228,18 +1228,17 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     } else {
 
-        /* If a resource retrieval failed using the initial module value, attempt to  */
-        /* locate an associated MUI file and retry the resource retrieveal.           */
+        /* If a resource retrieval failed using the initial module value, attempt to */
+        /* locate an associated MUI file and retry the resource retrieval.           */
 
         module = get_mui(module);
 
-        rsrc = get_rsc(module, type, name, lang);
+        rsrc = get_res_handle(module, type, name, lang);
 
         return rsrc;
 
     }
     /* MUI End   */
-
 }
 
 
