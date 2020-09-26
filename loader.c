@@ -23,16 +23,18 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND, USA (14 September, 2020)                      */
+/* Craig Schulstad - Horace, ND  USA (26 September, 2020)                      */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
+/* Version being enhanced:  5.18                                               */
+/*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
-/*   get_res_handle (Relocation of the resource loader function call)          */
+/*   get_res_handle (Relocation of the resource loader function call)          */ 
 /*                                                                             */
 /* The following function(s) were modified:                                    */
 /*   LoadResource   (Perform conditioned get_mui call)                         */
@@ -84,7 +86,7 @@ static BOOL recursion_flag = 0;
 /* MUI Start */
 
 /***********************************************************************/
-/* get_mui - Acquire an MUI for the associated resource                */
+/* get_mui - Acquire an MUI for the associated resource                 */
 /***********************************************************************/
 
 HMODULE get_mui(HMODULE module)
