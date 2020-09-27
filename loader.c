@@ -1226,8 +1226,6 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     if (rsrc) { 
 
-        WINE_FIXME(" Std module: %p, Type: %s, Name: %s, Handle: %p \n", module, debugstr_w(type), debugstr_w(name), rsrc);
-
         return rsrc;
 
     } else {
@@ -1238,8 +1236,6 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
         module = get_mui(module);
 
         rsrc = get_res_handle(module, type, name, lang);
-
-        WINE_FIXME(" MUI module: %p, Type: %s, Name: %s, Handle: %p \n", module, debugstr_w(type), debugstr_w(name), rsrc);
 
         return rsrc;
 
@@ -1292,8 +1288,6 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     /* associated with the MUI file instead of the executable file.                                */
    
     if (((HMODULE)rsrc < module) || ((mui_module > module) && ((HMODULE)rsrc > mui_module))) module = mui_module;
-
-    WINE_FIXME("Module: %p, Resource: %p \n", module, rsrc);
 
     /* MUI End   */
 
