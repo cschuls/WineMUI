@@ -23,25 +23,22 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (26 September, 2020)                      */
+/* Craig Schulstad - Horace, ND  USA (11 October, 2020)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire a MUI file reference to */
 /* be used by the various resource fetch functions.  Without these code        */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
-/* Version being enhanced:  5.18                                               */
+/* Version being enhanced:  5.19                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
 /*   get_res_handle (Relocation of the resource loader function call)          */ 
 /*                                                                             */
 /* The following function(s) were modified:                                    */
-/*   LoadResource   (Perform conditioned get_mui call)                         */
-/*   FindResoureExW (Split out resource loader function)                       */
-/*                                                                             */
-/* NOTE - you may need to add a language environment to the Linux environment  */
-/* set (e.g. LANGUAGE=en_US) or your program may crash!                        */
+/*   LoadResource    (Perform conditioned get_mui call)                        */
+/*   FindResourceExW (Split out resource loader function)                      */
 /*                                                                             */
 /*******************************************************************************/
 
@@ -86,7 +83,7 @@ static BOOL recursion_flag = 0;
 /* MUI Start */
 
 /***********************************************************************/
-/* get_mui - Acquire an MUI for the associated resource                 */
+/* get_mui - Acquire an MUI for the associated resource                */
 /***********************************************************************/
 
 HMODULE get_mui(HMODULE module)
@@ -95,14 +92,29 @@ HMODULE get_mui(HMODULE module)
 
     HMODULE mui_module = NULL;
 
-    WCHAR module_name[MAX_PATH];
-    WCHAR mui_name[MAX_PATH];
-    WCHAR exe_suffix[5] = {'.', 'e', 'x', 'e', 0};
+    WCHAR module_name[MAX_PATH], mui_name[MAX_PATH];
 
-    INT i;
-    INT j;
-    INT k;
-    INT l;
+    INT i, j, k, l;
+
+    /* Initialize the work strings */
+
+    for (i = 0; i < MAX_PATH; i++) {
+        module_name[i] = 0;
+        mui_name[i] = 0;
+    }   
+
+    /* Note - the reference to the Windows file name for an "MUI" file has a structure such as   */
+    /* "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in testing   */
+    /* out the usage of the "GetModuleFileNameW" function, it was determined that it works with  */
+    /* a relative Linux file structure such as "xx-XX/Application.exe.mui". */
+
+    /* Acquire the base resource file name */
+
+    if (!(GetModuleFileNameW(module, module_name, MAX_PATH))) return module;
+
+    /*  Stay with the original module reference if this file is not an executable file. */
+
+    if (!(wcsstr(module_name, L".exe"))) return module;
 
     /* Acquire the locale name using GetUserDefaultLocaleName.  Since this function utilizes the FindResourceExW function, */
     /* this sets up a recursive call to this function.  In order to avoid a stack overflow condition that would be caused  */
@@ -123,31 +135,12 @@ HMODULE get_mui(HMODULE module)
 
     }
 
-    /* Initialize the work strings */
-
-    for (i = 0; i < MAX_PATH; i++) {
-        module_name[i] = 0;
-        mui_name[i] = 0;
-    }   
-
-    /* Note - the reference to the Windows file name for a "MUI" file has a structure such as    */
-    /* "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in testing   */
-    /* out the usage of the "GetModuleFileNameW" function, it was determined that it works with  */
-    /* a relative Linux file structure such as "xx-XX/Application.exe.mui". */
-
-    /* Acquire the base resource file name */
-
-    j = GetModuleFileNameW(module, module_name, MAX_PATH);
-
-    if (j == 0) return module;
-
-    /* For now, this program patch will only attempt to locate "MUI" files for executable files and not "dll" files. */
-
-    if (!(wcsstr(module_name, exe_suffix))) return module;
-
     /* Locate the position of the final backslash in the retrieved executable file. */
 
+    j = 0;
+
     for (i = 0; i < MAX_PATH; i++) {
+
         if (module_name[i] == 0) break;
 
         if (module_name[i] == '\\') j = i;
@@ -158,6 +151,7 @@ HMODULE get_mui(HMODULE module)
     k = 0;
 
     for (i = 0; i < MAX_PATH; i++) {
+
         if (module_name[i] == 0) break;
 
         /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will */
@@ -184,13 +178,7 @@ HMODULE get_mui(HMODULE module)
 
     /* Finally, append the literal ".mui" onto the file reference. */
 
-    mui_name[k] = '.';
-    k++;
-    mui_name[k] = 'm';
-    k++;
-    mui_name[k] = 'u';
-    k++;
-    mui_name[k] = 'i';
+    wcscat(mui_name, L".mui");
 
     /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
 
@@ -1271,7 +1259,7 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
     /* MUI Start */
 
-    HMODULE mui_module = get_mui(module);
+    HMODULE mui_module = NULL;
 
     /* MUI End   */
 
@@ -1286,6 +1274,8 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     /* or if an MUI reference was found and the MUI reference and handle value are larger than the */
     /* module value for the executable file.  That is a signal that the resource handle is to be   */                                    
     /* associated with the MUI file instead of the executable file.                                */
+
+    mui_module = get_mui(module);
    
     if (((HMODULE)rsrc < module) || ((mui_module > module) && ((HMODULE)rsrc > mui_module))) module = mui_module;
 
