@@ -23,10 +23,10 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (11 October, 2020)                        */
+/* Craig Schulstad - Horace, ND  USA (16 October, 2020)                        */
 /*                                                                             */
-/* This program has been revised to reactively acquire a MUI file reference to */
-/* be used by the various resource fetch functions.  Without these code        */
+/* This program has been revised to reactively acquire an MUI file reference   */
+/* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
@@ -116,9 +116,9 @@ HMODULE get_mui(HMODULE module)
 
     if (!(wcsstr(module_name, L".exe"))) return module;
 
-    /* Acquire the locale name using GetUserDefaultLocaleName.  Since this function utilizes the FindResourceExW function, */
-    /* this sets up a recursive call to this function.  In order to avoid a stack overflow condition that would be caused  */
-    /* by repeated calls, a flag will be set on to return back to the FindResourceExW function without again calling the   */
+    /* Acquire the locale name using LCIDToLocaleName.  Since this function utilizes the FindResourceExW function, this */
+    /* sets up a recursive call to this function.  In order to avoid a stack overflow condition that would be caused by */
+    /* repeated calls, a flag will be set on to return back to the FindResourceExW function without again calling the   */
     /* locale acquisition function. */
 
     if (!(locale_found)) {
@@ -127,7 +127,7 @@ HMODULE get_mui(HMODULE module)
 
         recursion_flag = 1;
 
-        GetUserDefaultLocaleName(mui_locale, LOCALE_NAME_MAX_LENGTH);
+        LCIDToLocaleName( GetUserDefaultLCID(), mui_locale, LOCALE_NAME_MAX_LENGTH, 0 );
 
         recursion_flag = 0;
 
