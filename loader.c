@@ -80,121 +80,6 @@ static BOOL recursion_flag = 0;
  * Modules
  ***********************************************************************/
 
-/* MUI Start */
-
-/***********************************************************************/
-/* get_mui - Acquire an MUI for the associated resource                */
-/***********************************************************************/
-
-HMODULE get_mui(HMODULE module)
-
-{                 
-
-    HMODULE mui_module = NULL;
-
-    WCHAR module_name[MAX_PATH], mui_name[MAX_PATH];
-
-    INT i, j, k, l;
-
-    /* Initialize the work strings */
-
-    for (i = 0; i < MAX_PATH; i++) {
-        module_name[i] = 0;
-        mui_name[i] = 0;
-    }   
-
-    /* Note - the reference to the Windows file name for an "MUI" file has a structure such as   */
-    /* "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in testing   */
-    /* out the usage of the "GetModuleFileNameW" function, it was determined that it works with  */
-    /* a relative Linux file structure such as "xx-XX/Application.exe.mui". */
-
-    /* Acquire the base resource file name */
-
-    if (!(GetModuleFileNameW(module, module_name, MAX_PATH))) return module;
-
-    /*  Stay with the original module reference if this file is not an executable file. */
-
-    if (!(wcsstr(module_name, L".exe"))) return module;
-
-    /* Acquire the locale name using LCIDToLocaleName.  Since this function utilizes the FindResourceExW function, this */
-    /* sets up a recursive call to this function.  In order to avoid a stack overflow condition that would be caused by */
-    /* repeated calls, a flag will be set on to return back to the FindResourceExW function without again calling the   */
-    /* locale acquisition function. */
-
-    if (!(locale_found)) {
-
-        if (recursion_flag) return module;
-
-        recursion_flag = 1;
-
-        LCIDToLocaleName( GetUserDefaultLCID(), mui_locale, LOCALE_NAME_MAX_LENGTH, 0 );
-
-        recursion_flag = 0;
-
-        locale_found = 1;
-
-    }
-
-    /* Locate the position of the final backslash in the retrieved executable file. */
-
-    j = 0;
-
-    for (i = 0; i < MAX_PATH; i++) {
-
-        if (module_name[i] == 0) break;
-
-        if (module_name[i] == '\\') j = i;
-    }
-
-    /* Set up the work index that will be used to extract just the executable file from the fully qualified file name. */
-
-    k = 0;
-
-    for (i = 0; i < MAX_PATH; i++) {
-
-        if (module_name[i] == 0) break;
-
-        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will */
-        /* be copied to the "MUI" file reference. */
-
-        if (j < 0) {
-            mui_name[k] = module_name[i];
-            k++;
-        }
-
-        /* When the position of the final backslash has been reached, add the locale name as the folder/directory      */
-        /* containing the "MUI" file and reset work index "j" to -1. */
-
-        if (i >= j && j > 0) {
-            for (l = 0; l < 5; l++) {
-                mui_name[k] = mui_locale[l];
-                k++;
-            }
-            mui_name[k] = '/';
-            k++;
-            j = -1;
-        }
-    }
-
-    /* Finally, append the literal ".mui" onto the file reference. */
-
-    wcscat(mui_name, L".mui");
-
-    /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
-
-    mui_module = LoadLibraryExW(mui_name, 0, 0);
-
-    if (mui_module) {
-        return mui_module;
-    } else {
-        return module;
-    }
-
-    return module;
-
-}
-
-/* MUI End   */
 
 /******************************************************************
  *      get_proc_address
@@ -763,49 +648,6 @@ static NTSTATUS get_res_nameW( LPCWSTR name, UNICODE_STRING *str )
     return STATUS_SUCCESS;
 }
 
-/* MUI Start */
-
-/***********************************************************************/
-/* get_res_handle - Isolated call of the LdrFindResource function      */
-/***********************************************************************/
-
-HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
-
-{
-    NTSTATUS status;
-    UNICODE_STRING nameW, typeW;
-    LDR_RESOURCE_INFO info;
-    const IMAGE_RESOURCE_DATA_ENTRY *entry = NULL;
-
-    TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
-
-    nameW.Buffer = typeW.Buffer = NULL;
-
-    __TRY
-    {
-        if ((status = get_res_nameW( name, &nameW )) != STATUS_SUCCESS) goto done;
-        if ((status = get_res_nameW( type, &typeW )) != STATUS_SUCCESS) goto done;
-        info.Type = (ULONG_PTR)typeW.Buffer;
-        info.Name = (ULONG_PTR)nameW.Buffer;
-        info.Language = lang;
-        status = LdrFindResource_U( module, &info, 3, &entry );
-    done:
-        if (status != STATUS_SUCCESS) SetLastError( RtlNtStatusToDosError(status) );
-    }
-    __EXCEPT_PAGE_FAULT
-    {
-        SetLastError( ERROR_INVALID_PARAMETER );
-    }
-    __ENDTRY
-
-    if (!IS_INTRESOURCE(nameW.Buffer)) HeapFree( GetProcessHeap(), 0, nameW.Buffer );
-    if (!IS_INTRESOURCE(typeW.Buffer)) HeapFree( GetProcessHeap(), 0, typeW.Buffer );
-
-    return (HRSRC)entry;
-
-}             
-
-/* MUI End  */
 
 /**********************************************************************
  *	EnumResourceLanguagesExA	(kernelbase.@)
@@ -1196,6 +1038,161 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     return ret;
 }
 
+/* MUI Start */
+
+/***********************************************************************/
+/* get_mui - Acquire an MUI module for the associated resource         */
+/***********************************************************************/
+
+HMODULE get_mui(HMODULE module)
+
+{                 
+
+    HMODULE mui_module = NULL;
+
+    WCHAR module_name[MAX_PATH], mui_name[MAX_PATH];
+
+    INT i, j, k, l;
+
+    /* Initialize the work strings */
+
+    for (i = 0; i < MAX_PATH; i++) {
+        module_name[i] = 0;
+        mui_name[i] = 0;
+    }   
+
+    /* Note - the reference to the Windows file name for an "MUI" file has a structure such as   */
+    /* "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in testing   */
+    /* out the usage of the "GetModuleFileNameW" function, it was determined that it works with  */
+    /* a relative Linux file structure such as "xx-XX/Application.exe.mui". */
+
+    /* Acquire the base resource file name */
+
+    if (!(GetModuleFileNameW(module, module_name, MAX_PATH))) return module;
+
+    /*  Stay with the original module reference if this file is not an executable file. */
+
+    if (!(wcsstr(module_name, L".exe"))) return module;
+
+    /* Acquire the locale name using LCIDToLocaleName.  Since this function utilizes the FindResourceExW function, this */
+    /* sets up a recursive call to this function.  In order to avoid a stack overflow condition that would be caused by */
+    /* repeated calls, a flag will be set on to return back to the FindResourceExW function without again calling the   */
+    /* locale acquisition function. */
+
+    if (!(locale_found)) {
+
+        if (recursion_flag) return module;
+
+        recursion_flag = 1;
+
+        LCIDToLocaleName( GetUserDefaultLCID(), mui_locale, LOCALE_NAME_MAX_LENGTH, 0 );
+
+        recursion_flag = 0;
+
+        locale_found = 1;
+
+    }
+
+    /* Locate the position of the final backslash in the retrieved executable file. */
+
+    j = 0;
+
+    for (i = 0; i < MAX_PATH; i++) {
+
+        if (module_name[i] == 0) break;
+
+        if (module_name[i] == '\\') j = i;
+    }
+
+    /* Set up the work index that will be used to extract just the executable file from the fully qualified file name. */
+
+    k = 0;
+
+    for (i = 0; i < MAX_PATH; i++) {
+
+        if (module_name[i] == 0) break;
+
+        /* If work index "j" has been set to -1, then the file portion of the qualified name has been reached and will */
+        /* be copied to the "MUI" file reference. */
+
+        if (j < 0) {
+            mui_name[k] = module_name[i];
+            k++;
+        }
+
+        /* When the position of the final backslash has been reached, add the locale name as the folder/directory      */
+        /* containing the "MUI" file and reset work index "j" to -1. */
+
+        if (i >= j && j > 0) {
+            for (l = 0; l < 5; l++) {
+                mui_name[k] = mui_locale[l];
+                k++;
+            }
+            mui_name[k] = '/';
+            k++;
+            j = -1;
+        }
+    }
+
+    /* Finally, append the literal ".mui" onto the file reference. */
+
+    wcscat(mui_name, L".mui");
+
+    /* Now, see if there is an associated "MUI" file and if so use its handle for the module handle. */
+
+    mui_module = LoadLibraryExW(mui_name, 0, 0);
+
+    if (mui_module) {
+        return mui_module;
+    } else {
+        return module;
+    }
+
+    return module;
+
+}
+
+/***********************************************************************/
+/* get_res_handle - Isolated call of the LdrFindResource function      */
+/***********************************************************************/
+
+HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
+
+{
+    NTSTATUS status;
+    UNICODE_STRING nameW, typeW;
+    LDR_RESOURCE_INFO info;
+    const IMAGE_RESOURCE_DATA_ENTRY *entry = NULL;
+
+    TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
+
+    nameW.Buffer = typeW.Buffer = NULL;
+
+    __TRY
+    {
+        if ((status = get_res_nameW( name, &nameW )) != STATUS_SUCCESS) goto done;
+        if ((status = get_res_nameW( type, &typeW )) != STATUS_SUCCESS) goto done;
+        info.Type = (ULONG_PTR)typeW.Buffer;
+        info.Name = (ULONG_PTR)nameW.Buffer;
+        info.Language = lang;
+        status = LdrFindResource_U( module, &info, 3, &entry );
+    done:
+        if (status != STATUS_SUCCESS) SetLastError( RtlNtStatusToDosError(status) );
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+    }
+    __ENDTRY
+
+    if (!IS_INTRESOURCE(nameW.Buffer)) HeapFree( GetProcessHeap(), 0, nameW.Buffer );
+    if (!IS_INTRESOURCE(typeW.Buffer)) HeapFree( GetProcessHeap(), 0, typeW.Buffer );
+
+    return (HRSRC)entry;
+
+}             
+
+/* MUI End   */
 
 /**********************************************************************
  *	    FindResourceExW  (kernelbase.@)
