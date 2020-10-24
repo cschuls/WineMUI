@@ -23,22 +23,22 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (16 October, 2020)                        */
+/* Craig Schulstad - Horace, ND  USA (24 October, 2020)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
-/* Version being enhanced:  5.19                                               */
+/* Version being enhanced:  5.20                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
-/*   get_res_handle (Relocation of the resource loader function call)          */ 
+/*   get_res_handle (Relocation of the resource loader function call)          */
 /*                                                                             */
 /* The following function(s) were modified:                                    */
-/*   LoadResource    (Perform conditioned get_mui call)                        */
 /*   FindResourceExW (Split out resource loader function)                      */
+/*   LoadResource    (Perform conditioned get_mui call)                        */
 /*                                                                             */
 /*******************************************************************************/
 
@@ -73,7 +73,7 @@ static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list 
 /* MUI Start */
 static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH];
 static BOOL locale_found = 0;
-static BOOL recursion_flag = 0;   
+static BOOL recursion_flag = 0;
 /* MUI End   */
 
 /***********************************************************************
@@ -1046,7 +1046,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
 
 HMODULE get_mui(HMODULE module)
 
-{                 
+{
 
     HMODULE mui_module = NULL;
 
@@ -1059,7 +1059,7 @@ HMODULE get_mui(HMODULE module)
     for (i = 0; i < MAX_PATH; i++) {
         module_name[i] = 0;
         mui_name[i] = 0;
-    }   
+    }
 
     /* Note - the reference to the Windows file name for an "MUI" file has a structure such as   */
     /* "C:\Program Files\Application Directory\xx-XX\Application.exe.mui"; however, in testing   */
@@ -1190,7 +1190,7 @@ HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
 
     return (HRSRC)entry;
 
-}             
+}
 
 /* MUI End   */
 
@@ -1209,7 +1209,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     rsrc = get_res_handle(module, type, name, lang);
 
-    if (rsrc) { 
+    if (rsrc) {
 
         return rsrc;
 
@@ -1269,11 +1269,11 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
     /* Only check for an MUI reference if the resource handle value is less than the module value, */
     /* or if an MUI reference was found and the MUI reference and handle value are larger than the */
-    /* module value for the executable file.  That is a signal that the resource handle is to be   */                                    
+    /* module value for the executable file.  That is a signal that the resource handle is to be   */
     /* associated with the MUI file instead of the executable file.                                */
 
     mui_module = get_mui(module);
-   
+
     if (((HMODULE)rsrc < module) || ((mui_module > module) && ((HMODULE)rsrc > mui_module))) module = mui_module;
 
     /* MUI End   */
