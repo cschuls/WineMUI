@@ -1148,8 +1148,6 @@ HMODULE get_mui(HMODULE module)
         return module;
     }
 
-    return module;
-
 }
 
 /***********************************************************************/
