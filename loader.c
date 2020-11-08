@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (24 October, 2020)                        */
+/* Craig Schulstad - Horace, ND  USA (7 November, 2020)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the exe file for information.                                       */
 /*                                                                             */
-/* Version being enhanced:  5.20                                               */
+/* Version being enhanced:  5.21                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -474,18 +474,18 @@ __ASM_GLOBAL_FUNC( GetProcAddress,
                    "movq %rsp,%rbp\n\t"
                    __ASM_SEH(".seh_setframe %rbp,0\n\t")
                    __ASM_CFI(".cfi_def_cfa_register %rbp\n\t")
-                   "subq $0x60,%rsp\n\t"
-                   __ASM_SEH(".seh_stackalloc 0x60\n\t")
                    __ASM_SEH(".seh_endprologue\n\t")
-                   "movaps %xmm0,-0x10(%rbp)\n\t"
-                   "movaps %xmm1,-0x20(%rbp)\n\t"
-                   "movaps %xmm2,-0x30(%rbp)\n\t"
-                   "movaps %xmm3,-0x40(%rbp)\n\t"
+                   "subq $0x60,%rsp\n\t"
+                   "andq $~15,%rsp\n\t"
+                   "movaps %xmm0,0x20(%rsp)\n\t"
+                   "movaps %xmm1,0x30(%rsp)\n\t"
+                   "movaps %xmm2,0x40(%rsp)\n\t"
+                   "movaps %xmm3,0x50(%rsp)\n\t"
                    "call " __ASM_NAME("get_proc_address") "\n\t"
-                   "movaps -0x40(%rbp), %xmm3\n\t"
-                   "movaps -0x30(%rbp), %xmm2\n\t"
-                   "movaps -0x20(%rbp), %xmm1\n\t"
-                   "movaps -0x10(%rbp), %xmm0\n\t"
+                   "movaps 0x50(%rsp), %xmm3\n\t"
+                   "movaps 0x40(%rsp), %xmm2\n\t"
+                   "movaps 0x30(%rsp), %xmm1\n\t"
+                   "movaps 0x20(%rsp), %xmm0\n\t"
                    "leaq 0(%rbp),%rsp\n\t"
                    __ASM_CFI(".cfi_def_cfa_register %rsp\n\t")
                    "popq %rbp\n\t"
