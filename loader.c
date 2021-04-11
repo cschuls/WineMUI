@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (27 March, 2021)                          */
+/* Craig Schulstad - Horace, ND  USA (11 April, 2021)                          */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  6.5                                                */
+/* Version being enhanced:  6.6                                                */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -134,7 +134,11 @@ static BOOL load_library_as_datafile( LPCWSTR load_path, DWORD flags, LPCWSTR na
     if (!(flags & LOAD_LIBRARY_AS_IMAGE_RESOURCE))
     {
         /* make sure it's a valid PE file */
-        if (!RtlImageNtHeader( module )) goto failed;
+        if (!RtlImageNtHeader( module ))
+        {
+            SetLastError( ERROR_BAD_EXE_FORMAT );
+            goto failed;
+        }
         *mod_ret = (HMODULE)((char *)module + 1); /* set bit 0 for data file module */
 
         if (flags & LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE)
@@ -181,31 +185,22 @@ static HMODULE load_library( const UNICODE_STRING *libname, DWORD flags )
 
         LdrLockLoaderLock( 0, NULL, &magic );
         if (!LdrGetDllHandle( load_path, flags, libname, &module ))
-        {
             LdrAddRefDll( 0, module );
-            LdrUnlockLoaderLock( 0, magic );
-            goto done;
-        }
-        if (load_library_as_datafile( load_path, flags, libname->Buffer, &module ))
-        {
-            LdrUnlockLoaderLock( 0, magic );
-            goto done;
-        }
+        else
+            load_library_as_datafile( load_path, flags, libname->Buffer, &module );
         LdrUnlockLoaderLock( 0, magic );
-        flags |= DONT_RESOLVE_DLL_REFERENCES; /* Just in case */
-        /* Fallback to normal behaviour */
+    }
+    else
+    {
+        status = LdrLoadDll( load_path, flags, libname, &module );
+        if (!set_ntstatus( status ))
+        {
+            module = 0;
+            if (status == STATUS_DLL_NOT_FOUND && (GetVersion() & 0x80000000))
+                SetLastError( ERROR_DLL_NOT_FOUND );
+        }
     }
 
-    status = LdrLoadDll( load_path, flags, libname, &module );
-    if (status != STATUS_SUCCESS)
-    {
-        module = 0;
-        if (status == STATUS_DLL_NOT_FOUND && (GetVersion() & 0x80000000))
-            SetLastError( ERROR_DLL_NOT_FOUND );
-        else
-            SetLastError( RtlNtStatusToDosError( status ) );
-    }
-done:
     RtlReleasePath( load_path );
     return module;
 }
@@ -1197,6 +1192,7 @@ HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
  */
 HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang )
 {
+
     /* MUI Start */
 
     HRSRC rsrc;
@@ -1224,6 +1220,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 
     }
     /* MUI End   */
+
 }
 
 
