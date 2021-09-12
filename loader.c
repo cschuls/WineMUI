@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (27 August, 2021)                         */
+/* Craig Schulstad - Horace, ND  USA (11 September, 2021)                      */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  6.16                                               */
+/* Version being enhanced:  6.17                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -1186,6 +1186,7 @@ HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
 }
 
 /* MUI End   */
+
 /**********************************************************************
  *	    FindResourceExW  (kernelbase.@)
  */
