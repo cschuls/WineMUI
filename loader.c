@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (25 September, 2021)                      */
+/* Craig Schulstad - Horace, ND  USA (9 October, 2021)                         */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  6.18                                               */
+/* Version being enhanced:  6.19                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -69,6 +69,15 @@ struct exclusive_datafile
     HANDLE      file;
 };
 static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list );
+
+static CRITICAL_SECTION exclusive_datafile_list_section;
+static CRITICAL_SECTION_DEBUG critsect_debug =
+{
+    0, 0, &exclusive_datafile_list_section,
+    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": exclusive_datafile_list_section") }
+};
+static CRITICAL_SECTION exclusive_datafile_list_section = { &critsect_debug, -1, 0, 0, 0, 0 };
 
 /* MUI Start */
 static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH];
@@ -147,7 +156,9 @@ static BOOL load_library_as_datafile( LPCWSTR load_path, DWORD flags, LPCWSTR na
             if (!datafile) goto failed;
             datafile->module = *mod_ret;
             datafile->file   = file;
+            RtlEnterCriticalSection( &exclusive_datafile_list_section );
             list_add_head( &exclusive_datafile_list, &datafile->entry );
+            RtlLeaveCriticalSection( &exclusive_datafile_list_section );
             TRACE( "delaying close %p for module %p\n", datafile->file, datafile->module );
             return TRUE;
         }
@@ -181,14 +192,8 @@ static HMODULE load_library( const UNICODE_STRING *libname, DWORD flags )
     if (flags & (LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE |
                  LOAD_LIBRARY_AS_IMAGE_RESOURCE))
     {
-        ULONG_PTR magic;
-
-        LdrLockLoaderLock( 0, NULL, &magic );
-        if (!LdrGetDllHandle( load_path, flags, libname, &module ))
-            LdrAddRefDll( 0, module );
-        else
+        if (LdrGetDllHandleEx( 0, load_path, NULL, libname, &module ))
             load_library_as_datafile( load_path, flags, libname->Buffer, &module );
-        LdrUnlockLoaderLock( 0, magic );
     }
     else
     {
@@ -269,9 +274,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeLibrary( HINSTANCE module )
         if ((ULONG_PTR)module & 1)
         {
             struct exclusive_datafile *file;
-            ULONG_PTR magic;
 
-            LdrLockLoaderLock( 0, NULL, &magic );
+            RtlEnterCriticalSection( &exclusive_datafile_list_section );
             LIST_FOR_EACH_ENTRY( file, &exclusive_datafile_list, struct exclusive_datafile, entry )
             {
                 if (file->module != module) continue;
@@ -281,7 +285,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeLibrary( HINSTANCE module )
                 HeapFree( GetProcessHeap(), 0, file );
                 break;
             }
-            LdrUnlockLoaderLock( 0, magic );
+            RtlLeaveCriticalSection( &exclusive_datafile_list_section );
         }
         return UnmapViewOfFile( ptr );
     }
@@ -322,9 +326,9 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetModuleFileNameA( HMODULE module, LPSTR filenam
 DWORD WINAPI DECLSPEC_HOTPATCH GetModuleFileNameW( HMODULE module, LPWSTR filename, DWORD size )
 {
     ULONG len = 0;
-    ULONG_PTR magic;
-    LDR_DATA_TABLE_ENTRY *pldr;
     WIN16_SUBSYSTEM_TIB *win16_tib;
+    UNICODE_STRING name;
+    NTSTATUS status;
 
     if (!module && ((win16_tib = NtCurrentTeb()->Tib.SubSystemTib)) && win16_tib->exe_name)
     {
@@ -334,22 +338,11 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetModuleFileNameW( HMODULE module, LPWSTR filena
         goto done;
     }
 
-    LdrLockLoaderLock( 0, NULL, &magic );
-
-    if (!module) module = NtCurrentTeb()->Peb->ImageBaseAddress;
-    if (set_ntstatus( LdrFindEntryForAddress( module, &pldr )))
-    {
-        len = min( size, pldr->FullDllName.Length / sizeof(WCHAR) );
-        memcpy( filename, pldr->FullDllName.Buffer, len * sizeof(WCHAR) );
-        if (len < size)
-        {
-            filename[len] = 0;
-            SetLastError( 0 );
-        }
-        else SetLastError( ERROR_INSUFFICIENT_BUFFER );
-    }
-
-    LdrUnlockLoaderLock( 0, magic );
+    name.Buffer = filename;
+    name.MaximumLength = min( size, UNICODE_STRING_MAX_CHARS ) * sizeof(WCHAR);
+    status = LdrGetDllFullName( module, &name );
+    if (!status || status == STATUS_BUFFER_TOO_SMALL) len = name.Length / sizeof(WCHAR);
+    SetLastError( RtlNtStatusToDosError( status ));
 done:
     TRACE( "%s\n", debugstr_wn(filename, len) );
     return len;
@@ -400,10 +393,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExA( DWORD flags, LPCSTR name, HMOD
  */
 BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExW( DWORD flags, LPCWSTR name, HMODULE *module )
 {
-    NTSTATUS status = STATUS_SUCCESS;
     HMODULE ret = NULL;
-    ULONG_PTR magic;
-    BOOL lock;
+    NTSTATUS status;
+    void *dummy;
 
     if (!module)
     {
@@ -411,35 +403,41 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExW( DWORD flags, LPCWSTR name, HMO
         return FALSE;
     }
 
-    /* if we are messing with the refcount, grab the loader lock */
-    lock = (flags & GET_MODULE_HANDLE_EX_FLAG_PIN) || !(flags & GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT);
-    if (lock) LdrLockLoaderLock( 0, NULL, &magic );
-
-    if (!name)
+    if ((flags & ~(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT
+                  | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS))
+                  || (flags & (GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT))
+                  == (GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT))
     {
-        ret = NtCurrentTeb()->Peb->ImageBaseAddress;
+        *module = NULL;
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
     }
-    else if (flags & GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS)
+
+    if (name && !(flags & GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS))
     {
-        void *dummy;
-        if (!(ret = RtlPcToFileHeader( (void *)name, &dummy ))) status = STATUS_DLL_NOT_FOUND;
+        UNICODE_STRING wstr;
+        ULONG ldr_flags = 0;
+
+        if (flags & GET_MODULE_HANDLE_EX_FLAG_PIN)
+            ldr_flags |= LDR_GET_DLL_HANDLE_EX_FLAG_PIN;
+        if (flags & GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT)
+            ldr_flags |= LDR_GET_DLL_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
+
+        RtlInitUnicodeString( &wstr, name );
+        status = LdrGetDllHandleEx( ldr_flags, NULL, NULL, &wstr, &ret );
     }
     else
     {
-        UNICODE_STRING wstr;
-        RtlInitUnicodeString( &wstr, name );
-        status = LdrGetDllHandle( NULL, 0, &wstr, &ret );
-    }
+        ret = name ? RtlPcToFileHeader( (void *)name, &dummy ) : NtCurrentTeb()->Peb->ImageBaseAddress;
 
-    if (status == STATUS_SUCCESS)
-    {
-        if (flags & GET_MODULE_HANDLE_EX_FLAG_PIN)
-            LdrAddRefDll( LDR_ADDREF_DLL_PIN, ret );
-        else if (!(flags & GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT))
-            LdrAddRefDll( 0, ret );
+        if (ret)
+        {
+            if (!(flags & GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT))
+                status = LdrAddRefDll( flags & GET_MODULE_HANDLE_EX_FLAG_PIN ? LDR_ADDREF_DLL_PIN : 0, ret );
+            else
+                status = STATUS_SUCCESS;
+        } else status = STATUS_DLL_NOT_FOUND;
     }
-
-    if (lock) LdrUnlockLoaderLock( 0, magic );
 
     *module = ret;
     return set_ntstatus( status );
