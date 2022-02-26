@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (11 February, 2022)                       */
+/* Craig Schulstad - Horace, ND  USA (26 February, 2022)                       */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  7.2                                                */
+/* Version being enhanced:  7.3                                                */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -41,7 +41,6 @@
 /*   LoadResource    (Perform conditioned get_mui call)                        */
 /*                                                                             */
 /*******************************************************************************/
-
 #include <stdarg.h>
 
 #define NONAMELESSUNION
@@ -493,6 +492,22 @@ FARPROC WINAPI DECLSPEC_HOTPATCH GetProcAddress( HMODULE module, LPCSTR function
 }
 
 #endif /* __x86_64__ */
+
+
+/***********************************************************************
+ *	IsApiSetImplemented   (kernelbase.@)
+ */
+BOOL WINAPI IsApiSetImplemented( LPCSTR name )
+{
+    UNICODE_STRING str;
+    NTSTATUS status;
+    BOOLEAN in_schema, present;
+
+    if (!RtlCreateUnicodeStringFromAsciiz( &str, name )) return FALSE;
+    status = ApiSetQueryApiSetPresenceEx( &str, &in_schema, &present );
+    RtlFreeUnicodeString( &str );
+    return !status && present;
+}
 
 
 /***********************************************************************
