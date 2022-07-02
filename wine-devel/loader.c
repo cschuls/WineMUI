@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (17 June, 2022)                           */
+/* Craig Schulstad - Horace, ND  USA (1 July, 2022)                            */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  7.11                                               */
+/* Version being enhanced:  7.12                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -41,6 +41,7 @@
 /*   LoadResource    (Perform conditioned get_mui call)                        */
 /*                                                                             */
 /*******************************************************************************/
+
 #include <stdarg.h>
 
 #define NONAMELESSUNION
@@ -1045,6 +1046,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     HeapFree( GetProcessHeap(), 0, type );
     return ret;
 }
+
 
 /* MUI Start */
 
