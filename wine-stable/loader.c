@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (21 January, 2022)                        */
+/* Craig Schulstad - Horace, ND  USA (24 January, 2023)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  7.0                                                */
+/* Version being enhanced:  8.0                                                */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -185,7 +185,7 @@ static HMODULE load_library( const UNICODE_STRING *libname, DWORD flags )
     HMODULE module;
     WCHAR *load_path, *dummy;
 
-    if (flags & unsupported_flags) FIXME( "unsupported flag(s) used %#08x\n", flags );
+    if (flags & unsupported_flags) FIXME( "unsupported flag(s) used %#08lx\n", flags );
 
     if (!set_ntstatus( LdrGetDllPath( libname->Buffer, flags, &load_path, &dummy ))) return 0;
 
@@ -496,6 +496,22 @@ FARPROC WINAPI DECLSPEC_HOTPATCH GetProcAddress( HMODULE module, LPCSTR function
 
 
 /***********************************************************************
+ *	IsApiSetImplemented   (kernelbase.@)
+ */
+BOOL WINAPI IsApiSetImplemented( LPCSTR name )
+{
+    UNICODE_STRING str;
+    NTSTATUS status;
+    BOOLEAN in_schema, present;
+
+    if (!RtlCreateUnicodeStringFromAsciiz( &str, name )) return FALSE;
+    status = ApiSetQueryApiSetPresenceEx( &str, &in_schema, &present );
+    RtlFreeUnicodeString( &str );
+    return !status && present;
+}
+
+
+/***********************************************************************
  *	LoadLibraryA   (kernelbase.@)
  */
 HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryA( LPCSTR name )
@@ -558,7 +574,7 @@ HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryExW( LPCWSTR name, HANDLE file, DWOR
  */
 HMODULE WINAPI /* DECLSPEC_HOTPATCH */ LoadPackagedLibrary( LPCWSTR name, DWORD reserved )
 {
-    FIXME( "semi-stub, name %s, reserved %#x.\n", debugstr_w(name), reserved );
+    FIXME( "semi-stub, name %s, reserved %#lx.\n", debugstr_w(name), reserved );
     SetLastError( APPMODEL_ERROR_NO_PACKAGE );
     return NULL;
 }
@@ -657,11 +673,11 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceLanguagesExA( HMODULE module, LPCSTR t
     const IMAGE_RESOURCE_DIRECTORY *basedir, *resdir;
     const IMAGE_RESOURCE_DIRECTORY_ENTRY *et;
 
-    TRACE( "%p %s %s %p %lx %x %d\n", module, debugstr_a(type), debugstr_a(name),
+    TRACE( "%p %s %s %p %Ix %lx %d\n", module, debugstr_a(type), debugstr_a(name),
            func, param, flags, lang );
 
     if (flags & (RESOURCE_ENUM_MUI | RESOURCE_ENUM_MUI_SYSTEM | RESOURCE_ENUM_VALIDATE))
-        FIXME( "unimplemented flags: %x\n", flags );
+        FIXME( "unimplemented flags: %lx\n", flags );
 
     if (!flags) flags = RESOURCE_ENUM_LN | RESOURCE_ENUM_MUI;
     if (!(flags & RESOURCE_ENUM_LN)) return ret;
@@ -717,11 +733,11 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceLanguagesExW( HMODULE module, LPCWSTR 
     const IMAGE_RESOURCE_DIRECTORY *basedir, *resdir;
     const IMAGE_RESOURCE_DIRECTORY_ENTRY *et;
 
-    TRACE( "%p %s %s %p %lx %x %d\n", module, debugstr_w(type), debugstr_w(name),
+    TRACE( "%p %s %s %p %Ix %lx %d\n", module, debugstr_w(type), debugstr_w(name),
            func, param, flags, lang );
 
     if (flags & (RESOURCE_ENUM_MUI | RESOURCE_ENUM_MUI_SYSTEM | RESOURCE_ENUM_VALIDATE))
-        FIXME( "unimplemented flags: %x\n", flags );
+        FIXME( "unimplemented flags: %lx\n", flags );
 
     if (!flags) flags = RESOURCE_ENUM_LN | RESOURCE_ENUM_MUI;
     if (!(flags & RESOURCE_ENUM_LN)) return ret;
@@ -779,10 +795,10 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceNamesExA( HMODULE module, LPCSTR type,
     const IMAGE_RESOURCE_DIRECTORY_ENTRY *et;
     const IMAGE_RESOURCE_DIR_STRING_U *str;
 
-    TRACE( "%p %s %p %lx\n", module, debugstr_a(type), func, param );
+    TRACE( "%p %s %p %Ix\n", module, debugstr_a(type), func, param );
 
     if (flags & (RESOURCE_ENUM_MUI | RESOURCE_ENUM_MUI_SYSTEM | RESOURCE_ENUM_VALIDATE))
-        FIXME( "unimplemented flags: %x\n", flags );
+        FIXME( "unimplemented flags: %lx\n", flags );
 
     if (!flags) flags = RESOURCE_ENUM_LN | RESOURCE_ENUM_MUI;
     if (!(flags & RESOURCE_ENUM_LN)) return ret;
@@ -858,10 +874,10 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceNamesExW( HMODULE module, LPCWSTR type
     const IMAGE_RESOURCE_DIRECTORY_ENTRY *et;
     const IMAGE_RESOURCE_DIR_STRING_U *str;
 
-    TRACE( "%p %s %p %lx\n", module, debugstr_w(type), func, param );
+    TRACE( "%p %s %p %Ix\n", module, debugstr_w(type), func, param );
 
     if (flags & (RESOURCE_ENUM_MUI | RESOURCE_ENUM_MUI_SYSTEM | RESOURCE_ENUM_VALIDATE))
-        FIXME( "unimplemented flags: %x\n", flags );
+        FIXME( "unimplemented flags: %lx\n", flags );
 
     if (!flags) flags = RESOURCE_ENUM_LN | RESOURCE_ENUM_MUI;
     if (!(flags & RESOURCE_ENUM_LN)) return ret;
@@ -943,10 +959,10 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExA( HMODULE module, ENUMRESTYPEP
     const IMAGE_RESOURCE_DIRECTORY_ENTRY *et;
     const IMAGE_RESOURCE_DIR_STRING_U *str;
 
-    TRACE( "%p %p %lx\n", module, func, param );
+    TRACE( "%p %p %Ix\n", module, func, param );
 
     if (flags & (RESOURCE_ENUM_MUI | RESOURCE_ENUM_MUI_SYSTEM | RESOURCE_ENUM_VALIDATE))
-        FIXME( "unimplemented flags: %x\n", flags );
+        FIXME( "unimplemented flags: %lx\n", flags );
 
     if (!flags) flags = RESOURCE_ENUM_LN | RESOURCE_ENUM_MUI;
     if (!(flags & RESOURCE_ENUM_LN)) return ret;
@@ -996,7 +1012,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     const IMAGE_RESOURCE_DIRECTORY_ENTRY *et;
     const IMAGE_RESOURCE_DIR_STRING_U *str;
 
-    TRACE( "%p %p %lx\n", module, func, param );
+    TRACE( "%p %p %Ix\n", module, func, param );
 
     if (!flags) flags = RESOURCE_ENUM_LN | RESOURCE_ENUM_MUI;
     if (!(flags & RESOURCE_ENUM_LN)) return ret;
@@ -1030,6 +1046,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     HeapFree( GetProcessHeap(), 0, type );
     return ret;
 }
+
 
 /* MUI Start */
 
@@ -1327,7 +1344,7 @@ HANDLE WINAPI DECLSPEC_HOTPATCH CreateActCtxW( PCACTCTXW ctx )
 {
     HANDLE context;
 
-    TRACE( "%p %08x\n", ctx, ctx ? ctx->dwFlags : 0 );
+    TRACE( "%p %08lx\n", ctx, ctx ? ctx->dwFlags : 0 );
 
     if (!set_ntstatus( RtlCreateActivationContext( &context, ctx ))) return INVALID_HANDLE_VALUE;
     return context;
