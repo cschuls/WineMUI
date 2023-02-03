@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (24 January, 2023)                        */
+/* Craig Schulstad - Horace, ND  USA (2 February, 2023)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  8.0                                                */
+/* Version being enhanced:  8.1                                                */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -380,10 +380,23 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExA( DWORD flags, LPCSTR name, HMOD
 {
     WCHAR *nameW;
 
+    if (!module)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+	
+
     if (!name || (flags & GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS))
         return GetModuleHandleExW( flags, (LPCWSTR)name, module );
+	
 
-    if (!(nameW = file_name_AtoW( name, FALSE ))) return FALSE;
+    if (!(nameW = file_name_AtoW( name, FALSE )))
+    {
+        *module = NULL;
+        SetLastError( ERROR_MOD_NOT_FOUND );
+        return FALSE;
+    }
     return GetModuleHandleExW( flags, nameW, module );
 }
 
@@ -1047,7 +1060,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     return ret;
 }
 
-
 /* MUI Start */
 
 /***********************************************************************/
@@ -1236,7 +1248,8 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     }
 
     /* MUI End   */
-
+	
+	
 }
 
 
@@ -1264,13 +1277,12 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
 HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 {
     void *ret;
-
     /* MUI Start */
 
     HMODULE mui_module = NULL;
 
     /* MUI End   */
-
+	
     TRACE( "%p %p\n", module, rsrc );
 
     if (!rsrc) return 0;
@@ -1288,7 +1300,7 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     if (((HMODULE)rsrc < module) || ((mui_module > module) && ((HMODULE)rsrc > mui_module))) module = mui_module;
 
     /* MUI End   */
-
+	
     if (!set_ntstatus( LdrAccessResource( module, (IMAGE_RESOURCE_DATA_ENTRY *)rsrc, &ret, NULL )))
         return 0;
     return ret;
