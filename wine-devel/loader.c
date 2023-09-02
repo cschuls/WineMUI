@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (20 August, 2023)                         */
+/* Craig Schulstad - Horace, ND  USA (2 September, 2023)                       */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  8.14                                               */
+/* Version being enhanced:  8.15                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
