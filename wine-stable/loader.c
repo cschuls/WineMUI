@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (24 January, 2023)                        */
+/* Craig Schulstad - Horace, ND  USA (17 January, 2024)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  8.0                                                */
+/* Version being enhanced:  9.0                                                */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -44,14 +44,13 @@
 
 #include <stdarg.h>
 
-#define NONAMELESSUNION
-#define NONAMELESSSTRUCT
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winbase.h"
 #include "winnls.h"
 #include "winternl.h"
+#include "ddk/ntddk.h"
 #include "kernelbase.h"
 #include "wine/list.h"
 #include "wine/asm.h"
@@ -380,10 +379,21 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExA( DWORD flags, LPCSTR name, HMOD
 {
     WCHAR *nameW;
 
+    if (!module)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+
     if (!name || (flags & GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS))
         return GetModuleHandleExW( flags, (LPCWSTR)name, module );
 
-    if (!(nameW = file_name_AtoW( name, FALSE ))) return FALSE;
+    if (!(nameW = file_name_AtoW( name, FALSE )))
+    {
+        *module = NULL;
+        SetLastError( ERROR_MOD_NOT_FOUND );
+        return FALSE;
+    }
     return GetModuleHandleExW( flags, nameW, module );
 }
 
@@ -700,7 +710,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceLanguagesExA( HMODULE module, LPCSTR t
     {
         for (i = 0; i < resdir->NumberOfNamedEntries + resdir->NumberOfIdEntries; i++)
         {
-            ret = func( module, type, name, et[i].u.Id, param );
+            ret = func( module, type, name, et[i].Id, param );
             if (!ret) break;
         }
     }
@@ -760,7 +770,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceLanguagesExW( HMODULE module, LPCWSTR 
     {
         for (i = 0; i < resdir->NumberOfNamedEntries + resdir->NumberOfIdEntries; i++)
         {
-            ret = func( module, type, name, et[i].u.Id, param );
+            ret = func( module, type, name, et[i].Id, param );
             if (!ret) break;
         }
     }
@@ -818,9 +828,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceNamesExA( HMODULE module, LPCSTR type,
     {
         for (i = 0; i < resdir->NumberOfNamedEntries+resdir->NumberOfIdEntries; i++)
         {
-            if (et[i].u.s.NameIsString)
+            if (et[i].NameIsString)
             {
-                str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)basedir + et[i].u.s.NameOffset);
+                str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)basedir + et[i].NameOffset);
                 newlen = WideCharToMultiByte(CP_ACP, 0, str->NameString, str->Length, NULL, 0, NULL, NULL);
                 if (newlen + 1 > len)
                 {
@@ -838,7 +848,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceNamesExA( HMODULE module, LPCSTR type,
             }
             else
             {
-                ret = func( module, type, UIntToPtr(et[i].u.Id), param );
+                ret = func( module, type, UIntToPtr(et[i].Id), param );
             }
             if (!ret) break;
         }
@@ -897,9 +907,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceNamesExW( HMODULE module, LPCWSTR type
     {
         for (i = 0; i < resdir->NumberOfNamedEntries+resdir->NumberOfIdEntries; i++)
         {
-            if (et[i].u.s.NameIsString)
+            if (et[i].NameIsString)
             {
-                str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)basedir + et[i].u.s.NameOffset);
+                str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)basedir + et[i].NameOffset);
                 if (str->Length + 1 > len)
                 {
                     len = str->Length + 1;
@@ -916,7 +926,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceNamesExW( HMODULE module, LPCWSTR type
             }
             else
             {
-                ret = func( module, type, UIntToPtr(et[i].u.Id), param );
+                ret = func( module, type, UIntToPtr(et[i].Id), param );
             }
             if (!ret) break;
         }
@@ -974,9 +984,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExA( HMODULE module, ENUMRESTYPEP
     et = (const IMAGE_RESOURCE_DIRECTORY_ENTRY *)(resdir + 1);
     for (i = 0; i < resdir->NumberOfNamedEntries+resdir->NumberOfIdEntries; i++)
     {
-        if (et[i].u.s.NameIsString)
+        if (et[i].NameIsString)
         {
-            str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)resdir + et[i].u.s.NameOffset);
+            str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)resdir + et[i].NameOffset);
             newlen = WideCharToMultiByte( CP_ACP, 0, str->NameString, str->Length, NULL, 0, NULL, NULL);
             if (newlen + 1 > len)
             {
@@ -990,7 +1000,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExA( HMODULE module, ENUMRESTYPEP
         }
         else
         {
-            ret = func( module, UIntToPtr(et[i].u.Id), param );
+            ret = func( module, UIntToPtr(et[i].Id), param );
         }
         if (!ret) break;
     }
@@ -1024,9 +1034,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     et = (const IMAGE_RESOURCE_DIRECTORY_ENTRY *)(resdir + 1);
     for (i = 0; i < resdir->NumberOfNamedEntries + resdir->NumberOfIdEntries; i++)
     {
-        if (et[i].u.s.NameIsString)
+        if (et[i].NameIsString)
         {
-            str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)resdir + et[i].u.s.NameOffset);
+            str = (const IMAGE_RESOURCE_DIR_STRING_U *)((const BYTE *)resdir + et[i].NameOffset);
             if (str->Length + 1 > len)
             {
                 len = str->Length + 1;
@@ -1039,14 +1049,13 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
         }
         else
         {
-            ret = func( module, UIntToPtr(et[i].u.Id), param );
+            ret = func( module, UIntToPtr(et[i].Id), param );
         }
         if (!ret) break;
     }
     HeapFree( GetProcessHeap(), 0, type );
     return ret;
 }
-
 
 /* MUI Start */
 
@@ -1207,7 +1216,6 @@ HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
  */
 HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang )
 {
-
     /* MUI Start */
 
     HRSRC rsrc;
@@ -1236,7 +1244,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     }
 
     /* MUI End   */
-
+	
 }
 
 
@@ -1264,8 +1272,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
 HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 {
     void *ret;
-
-    /* MUI Start */
+	
+	/* MUI Start */
 
     HMODULE mui_module = NULL;
 
@@ -1275,8 +1283,8 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
     if (!rsrc) return 0;
     if (!module) module = GetModuleHandleW( 0 );
-
-    /* MUI Start */
+	
+	/* MUI Start */
 
     /* Only check for an MUI reference if the resource handle value is less than the module value, */
     /* or if an MUI reference was found and the MUI reference and handle value are larger than the */
@@ -1288,7 +1296,7 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     if (((HMODULE)rsrc < module) || ((mui_module > module) && ((HMODULE)rsrc > mui_module))) module = mui_module;
 
     /* MUI End   */
-
+	
     if (!set_ntstatus( LdrAccessResource( module, (IMAGE_RESOURCE_DATA_ENTRY *)rsrc, &ret, NULL )))
         return 0;
     return ret;
