@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (1 June, 2024)                            */
+/* Craig Schulstad - Horace, ND  USA (15 June, 2024)                           */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  9.10                                               */
+/* Version being enhanced:  9.11                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -458,7 +458,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExW( DWORD flags, LPCWSTR name, HMO
  *	GetProcAddress   (kernelbase.@)
  */
 
-#ifdef __x86_64__
 /*
  * Work around a Delphi bug on x86_64.  When delay loading a symbol,
  * Delphi saves rcx, rdx, r8 and r9 to the stack.  It then calls
@@ -468,6 +467,23 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExW( DWORD flags, LPCWSTR name, HMO
  * these registers if the function takes floating point parameters.
  * This wrapper saves xmm0 - 3 to the stack.
  */
+#ifdef __arm64ec__
+FARPROC WINAPI __attribute__((naked)) GetProcAddress( HMODULE module, LPCSTR function )
+{
+    asm( ".seh_proc \"#GetProcAddress\"\n\t"
+         "stp x29, x30, [sp, #-48]!\n\t"
+         ".seh_save_fplr_x 48\n\t"
+         ".seh_endprologue\n\t"
+         "stp d0, d1, [sp, #16]\n\t"
+         "stp d2, d3, [sp, #32]\n\t"
+         "bl \"#get_proc_address\"\n\t"
+         "ldp d0, d1, [sp, #16]\n\t"
+         "ldp d2, d3, [sp, #32]\n\t"
+         "ldp x29, x30, [sp], #48\n\t"
+         "ret\n\t"
+         ".seh_endproc" );
+}
+#elif defined(__x86_64__)
 __ASM_GLOBAL_FUNC( GetProcAddress,
                    ".byte 0x48\n\t"  /* hotpatch prolog */
                    "pushq %rbp\n\t"
