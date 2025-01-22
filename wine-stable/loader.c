@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (17 January, 2024)                        */
+/* Craig Schulstad - Horace, ND  USA (22 January, 2025)                        */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  9.0                                                */
+/* Version being enhanced:  10.0                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -237,7 +237,7 @@ FARPROC WINAPI DECLSPEC_HOTPATCH DelayLoadFailureHook( LPCSTR name, LPCSTR funct
         ERR( "failed to delay load %s.%u\n", name, LOWORD(function) );
     args[0] = (ULONG_PTR)name;
     args[1] = (ULONG_PTR)function;
-    RaiseException( EXCEPTION_WINE_STUB, EH_NONCONTINUABLE, 2, args );
+    RaiseException( EXCEPTION_WINE_STUB, EXCEPTION_NONCONTINUABLE, 2, args );
     return NULL;
 }
 
@@ -458,7 +458,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExW( DWORD flags, LPCWSTR name, HMO
  *	GetProcAddress   (kernelbase.@)
  */
 
-#ifdef __x86_64__
 /*
  * Work around a Delphi bug on x86_64.  When delay loading a symbol,
  * Delphi saves rcx, rdx, r8 and r9 to the stack.  It then calls
@@ -468,6 +467,23 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetModuleHandleExW( DWORD flags, LPCWSTR name, HMO
  * these registers if the function takes floating point parameters.
  * This wrapper saves xmm0 - 3 to the stack.
  */
+#ifdef __arm64ec__
+FARPROC WINAPI __attribute__((naked)) GetProcAddress( HMODULE module, LPCSTR function )
+{
+    asm( ".seh_proc \"#GetProcAddress\"\n\t"
+         "stp x29, x30, [sp, #-48]!\n\t"
+         ".seh_save_fplr_x 48\n\t"
+         ".seh_endprologue\n\t"
+         "stp d0, d1, [sp, #16]\n\t"
+         "stp d2, d3, [sp, #32]\n\t"
+         "bl \"#get_proc_address\"\n\t"
+         "ldp d0, d1, [sp, #16]\n\t"
+         "ldp d2, d3, [sp, #32]\n\t"
+         "ldp x29, x30, [sp], #48\n\t"
+         "ret\n\t"
+         ".seh_endproc" );
+}
+#elif defined(__x86_64__)
 __ASM_GLOBAL_FUNC( GetProcAddress,
                    ".byte 0x48\n\t"  /* hotpatch prolog */
                    "pushq %rbp\n\t"
@@ -1244,7 +1260,6 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     }
 
     /* MUI End   */
-	
 }
 
 
