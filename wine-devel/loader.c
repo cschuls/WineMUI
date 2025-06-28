@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (15 June, 2025)                           */
+/* Craig Schulstad - Horace, ND  USA (28 June, 2025)                           */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  10.10                                              */
+/* Version being enhanced:  10.11                                              */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -561,9 +561,16 @@ HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryW( LPCWSTR name )
 HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryExA( LPCSTR name, HANDLE file, DWORD flags )
 {
     WCHAR *nameW;
+    HMODULE module;
 
-    if (!(nameW = file_name_AtoW( name, FALSE ))) return 0;
-    return LoadLibraryExW( nameW, file, flags );
+    /* A new allocation is necessary due to TP Shell Service
+     * calling LoadLibraryExA from an LdrLoadDll hook */
+    if (!(nameW = file_name_AtoW( name, TRUE ))) return 0;
+
+    module = LoadLibraryExW( nameW, file, flags );
+
+    HeapFree( GetProcessHeap(), 0, nameW );
+    return module;
 }
 
 
@@ -581,7 +588,7 @@ HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryExW( LPCWSTR name, HANDLE file, DWOR
         return 0;
     }
     RtlInitUnicodeString( &str, name );
-    if (str.Buffer[str.Length/sizeof(WCHAR) - 1] != ' ') return load_library( &str, flags );
+    if (str.Length && str.Buffer[str.Length/sizeof(WCHAR) - 1] != ' ') return load_library( &str, flags );
 
     /* library name has trailing spaces */
     RtlCreateUnicodeString( &str, name );
@@ -1232,9 +1239,42 @@ HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
  */
 HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang )
 {
-    /* MUI Start */
+	/* MUI Start */
+	
+	/*
+    NTSTATUS status;
+    UNICODE_STRING nameW, typeW;
+    LDR_RESOURCE_INFO info;
+    const IMAGE_RESOURCE_DATA_ENTRY *entry = NULL;
 
-    HRSRC rsrc;
+    TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
+
+    if (!module) module = GetModuleHandleW( 0 );
+    nameW.Buffer = typeW.Buffer = NULL;
+
+    __TRY
+    {
+        if ((status = get_res_nameW( name, &nameW )) != STATUS_SUCCESS) goto done;
+        if ((status = get_res_nameW( type, &typeW )) != STATUS_SUCCESS) goto done;
+        info.Type = (ULONG_PTR)typeW.Buffer;
+        info.Name = (ULONG_PTR)nameW.Buffer;
+        info.Language = lang;
+        status = LdrFindResource_U( module, &info, 3, &entry );
+    done:
+        if (status != STATUS_SUCCESS) SetLastError( RtlNtStatusToDosError(status) );
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+    }
+    __ENDTRY
+
+    if (!IS_INTRESOURCE(nameW.Buffer)) HeapFree( GetProcessHeap(), 0, nameW.Buffer );
+    if (!IS_INTRESOURCE(typeW.Buffer)) HeapFree( GetProcessHeap(), 0, typeW.Buffer );
+    return (HRSRC)entry;
+	*/
+	
+	HRSRC rsrc;
 
     TRACE( "%p %s %s %04x\n", module, debugstr_w(type), debugstr_w(name), lang );
 
@@ -1258,8 +1298,8 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
         return rsrc;
 
     }
-
-    /* MUI End   */
+	
+	/* MUI End   */
 }
 
 
@@ -1365,7 +1405,7 @@ void WINAPI DECLSPEC_HOTPATCH AddRefActCtx( HANDLE context )
  */
 HANDLE WINAPI DECLSPEC_HOTPATCH CreateActCtxW( PCACTCTXW ctx )
 {
-    HANDLE context;
+    struct _ACTIVATION_CONTEXT *context;
 
     TRACE( "%p %08lx\n", ctx, ctx ? ctx->dwFlags : 0 );
 
@@ -1417,7 +1457,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FindActCtxSectionStringW( DWORD flags, const GUID 
  */
 BOOL WINAPI DECLSPEC_HOTPATCH GetCurrentActCtx( HANDLE *pcontext )
 {
-    return set_ntstatus( RtlGetActiveActivationContext( pcontext ));
+    return set_ntstatus( RtlGetActiveActivationContext( (struct _ACTIVATION_CONTEXT **)pcontext ));
 }
 
 
