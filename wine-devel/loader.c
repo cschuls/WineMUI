@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (7 March, 2026)                           */
+/* Craig Schulstad - Horace, ND  USA (20 March, 2026)                          */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  11.4                                               */
+/* Version being enhanced:  11.5                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -68,6 +68,13 @@ struct exclusive_datafile
 };
 static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list );
 
+/* MUI Start */
+static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH];
+static BOOL locale_found = FALSE;
+static BOOL recursion_flag = FALSE;
+static HMODULE module_mui = NULL;
+/* MUI End   */
+
 static CRITICAL_SECTION exclusive_datafile_list_section;
 static CRITICAL_SECTION_DEBUG critsect_debug =
 {
@@ -76,13 +83,6 @@ static CRITICAL_SECTION_DEBUG critsect_debug =
       0, 0, { (DWORD_PTR)(__FILE__ ": exclusive_datafile_list_section") }
 };
 static CRITICAL_SECTION exclusive_datafile_list_section = { &critsect_debug, -1, 0, 0, 0, 0 };
-
-/* MUI Start */
-static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH];
-static BOOL locale_found = FALSE;
-static BOOL recursion_flag = FALSE;
-static HMODULE module_mui = NULL;
-/* MUI End   */
 
 /***********************************************************************
  * Modules
@@ -1084,8 +1084,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     return ret;
 }
 
-/* MUI Start */
 
+/* MUI Start */
 /***********************************************************************/
 /* get_mui - Acquire an MUI module for the associated resource         */
 /***********************************************************************/
@@ -1186,7 +1186,7 @@ HMODULE get_mui(HMODULE module)
         module_mui = NULL;
         return module;
     }
-	
+
 }
 
 /***********************************************************************/
@@ -1235,7 +1235,7 @@ HRSRC get_res_handle(HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang)
  */
 HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LPCWSTR name, WORD lang )
 {
-	
+
     HRSRC rsrc;
     HMODULE work_module = NULL, test_module = NULL;
 
@@ -1250,7 +1250,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
         test_module = get_mui(module);
         if (test_module == module) {
             rsrc = get_res_handle(module, type, name, lang);
-			module_mui = NULL;
+            module_mui = NULL;
         } else {
             rsrc = get_res_handle(test_module, type, name, lang);
 			
@@ -1261,13 +1261,11 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
             }
         }
     }
-	
+
     return rsrc;
 
 }
-
 /* MUI End   */
-
 
 /**********************************************************************
  *	    FindResourceW    (kernelbase.@)
@@ -1287,14 +1285,13 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
 }
 
 /* MUI Start */
-
 /**********************************************************************
  *	    LoadResource     (kernelbase.@)
  */
 HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 {
     void *ret;
-	HMODULE work_module = NULL;
+    HMODULE work_module = NULL;
 
     if (!rsrc) return 0;
     if (!module) module = GetModuleHandleW( 0 );
@@ -1317,8 +1314,7 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     return ret;
 
 }
-
-/* MUI End  */
+/* MUI End   */
 
 /**********************************************************************
  *	    LockResource     (kernelbase.@)
