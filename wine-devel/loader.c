@@ -19,18 +19,18 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
-
+ 
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (20 March, 2026)                          */
+/* Craig Schulstad - Horace, ND  USA (4 April, 2026)                           */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  11.5                                               */
+/* Version being enhanced:  11.6                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -55,6 +55,9 @@
 #include "wine/asm.h"
 #include "wine/debug.h"
 #include "wine/exception.h"
+/* MUI Start */
+#include "winreg.h"
+/* MUI End   */
 
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 
@@ -68,13 +71,6 @@ struct exclusive_datafile
 };
 static struct list exclusive_datafile_list = LIST_INIT( exclusive_datafile_list );
 
-/* MUI Start */
-static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH];
-static BOOL locale_found = FALSE;
-static BOOL recursion_flag = FALSE;
-static HMODULE module_mui = NULL;
-/* MUI End   */
-
 static CRITICAL_SECTION exclusive_datafile_list_section;
 static CRITICAL_SECTION_DEBUG critsect_debug =
 {
@@ -83,6 +79,11 @@ static CRITICAL_SECTION_DEBUG critsect_debug =
       0, 0, { (DWORD_PTR)(__FILE__ ": exclusive_datafile_list_section") }
 };
 static CRITICAL_SECTION exclusive_datafile_list_section = { &critsect_debug, -1, 0, 0, 0, 0 };
+
+/* MUI Start */
+static HMODULE module_mui = NULL;
+static WCHAR mui_locale[LOCALE_NAME_MAX_LENGTH] = {L'\0'};
+/* MUI End   */
 
 /***********************************************************************
  * Modules
@@ -1092,88 +1093,44 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
 
 HMODULE get_mui(HMODULE module)
 {
-    WCHAR module_name[MAX_PATH], mui_name[MAX_PATH];
+    WCHAR module_name[MAX_PATH], mui_name[MAX_PATH], * last_slash;
     HMODULE mui_module = NULL;
-    INT i, j = 0, k = 0, l = 0;
+    HKEY intl_key;
+    DWORD count = LOCALE_NAME_MAX_LENGTH;
     LONG save_error = GetLastError();
-
-    /* Initialize the work strings */
-
-    for (i = 0; i < MAX_PATH; i++) {
-        module_name[i] = 0;
-        mui_name[i] = 0;
-    }
-
-    /* Acquire the base resource file name */
 
     if (!(GetModuleFileNameW(module, module_name, MAX_PATH))) {
         TRACE ("Module file name was not found - returning with source module\n");
         SetLastError(save_error);
         return module;
     }
+
+    if (!(wcsstr(module_name, L".exe")) && !(wcsstr(module_name, L".EXE"))) return module;
+
+    if (wcslen(mui_locale) == 0) {
+        RegCreateKeyExW( HKEY_CURRENT_USER, L"Control Panel\\International",
+                     0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &intl_key, NULL );
+        RegQueryValueExW( intl_key, L"LocaleName", NULL, NULL, (BYTE *)mui_locale, &count );
+        TRACE("Locale name: %s\n", debugstr_w(mui_locale));
+    }
+
+    last_slash = wcsrchr(module_name, L'\\');
+
+    wcscpy(mui_name, module_name);
+
+    mui_name[last_slash - module_name + 1] = L'\0';
+
+    wcscat(mui_name, mui_locale);
+
+    wcscat(mui_name, last_slash);
+
+    if (wcsstr(module_name, L".exe")) {
+        wcscat(mui_name, L".mui");
+    } else {
+        wcscat(mui_name, L".MUI");
+    }
 	
-    /*  Stay with the original module reference if this file is not an executable file. */
-
-    if (!(wcsstr(module_name, L".exe"))) 
-        return module;
-
-    if (!(locale_found)) {
-
-        if (recursion_flag) 
-            return module;
-
-        recursion_flag = TRUE;
-
-        LCIDToLocaleName( GetUserDefaultLCID(), mui_locale, LOCALE_NAME_MAX_LENGTH, 0 );
-
-        recursion_flag = FALSE;
-
-        locale_found = TRUE;
-
-    }
-
-    /* Locate the position of the final backslash in the retrieved executable file. */
-
-    for (i = 0; i < MAX_PATH; i++) {
-
-        if (module_name[i] == 0) break;
-
-        if (module_name[i] == '\\') j = i;
-    }
-
-    /* Set up the work index that will be used to extract just the executable file from the fully qualified file name. */
-
-    for (i = 0; i < MAX_PATH; i++) {
-
-        if (module_name[i] == 0) break;
-
-        /* If work index "j" has been set to -1, then the file portion of the qualified */
-        /* name has been reached and will be copied to the "MUI" file reference.        */
-
-        if (j < 0) {
-            mui_name[k] = module_name[i];
-            k++;
-        }
-
-        /* When the position of the final backslash has been reached, add the locale name as */
-        /* the folder/directory containing the "MUI" file and reset work index "j" to -1.    */
-
-        if (i >= j && j > 0) {
-            for (l = 0; l < 5; l++) {
-                mui_name[k] = mui_locale[l];
-                k++;
-            }
-            mui_name[k] = '/';
-            k++;
-            j = -1;
-        }
-    }
-
-    /* Finally, append the literal ".mui" onto the file reference. */
-
-    wcscat(mui_name, L".mui");
-
-    /* Now, see if there is an associated "MUI" file and if so, use its handle for the module handle. */
+    TRACE("Language path: %s\n", debugstr_w(mui_name));
 
     mui_module = LoadLibraryExW(mui_name, 0, 0);
 	
@@ -1240,7 +1197,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     HMODULE work_module = NULL, test_module = NULL;
 
     if (!module) module = GetModuleHandleW( 0 );
-	
+
     work_module = GetModuleHandleW( 0 );
 	
     if (module != work_module) {
@@ -1267,6 +1224,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
 }
 /* MUI End   */
 
+
 /**********************************************************************
  *	    FindResourceW    (kernelbase.@)
  */
@@ -1284,6 +1242,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
     return FALSE;
 }
 
+
 /* MUI Start */
 /**********************************************************************
  *	    LoadResource     (kernelbase.@)
@@ -1296,14 +1255,14 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
     if (!rsrc) return 0;
     if (!module) module = GetModuleHandleW( 0 );
     work_module = module;
-	
+
     /* Check for and use a MUI module  	*/
 	
     if (module_mui != NULL)	{
         if (((HMODULE)rsrc < module) || ((module_mui > module) && ((HMODULE)rsrc > module_mui))) 
         work_module = module_mui;
     }
-	
+
     /* Ready this handle for next resource retrieval  */
 	
     module_mui= NULL;				
@@ -1315,6 +1274,7 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
 }
 /* MUI End   */
+
 
 /**********************************************************************
  *	    LockResource     (kernelbase.@)
