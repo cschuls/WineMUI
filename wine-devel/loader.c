@@ -19,18 +19,18 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
- 
+
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (4 April, 2026)                           */
+/* Craig Schulstad - Horace, ND  USA (18 April, 2026)                          */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  11.6                                               */
+/* Version being enhanced:  11.7                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -345,7 +345,14 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetModuleFileNameW( HMODULE module, LPWSTR filena
     name.Buffer = filename;
     name.MaximumLength = min( size, UNICODE_STRING_MAX_CHARS ) * sizeof(WCHAR);
     status = LdrGetDllFullName( module, &name );
-    if (!status || status == STATUS_BUFFER_TOO_SMALL) len = name.Length / sizeof(WCHAR);
+    if (!status || status == STATUS_BUFFER_TOO_SMALL)
+    {
+        len = name.Length / sizeof(WCHAR);
+        /* LdrGetDllFullName calls RtlCopyUnicodeString which should terminate
+           if there's space, otherwise: */
+        if (status == STATUS_BUFFER_TOO_SMALL && size > 0)
+            filename[size - 1] = 0;
+    }
     SetLastError( RtlNtStatusToDosError( status ));
 done:
     TRACE( "%s\n", debugstr_wn(filename, len) );
@@ -1085,7 +1092,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     return ret;
 }
 
-
 /* MUI Start */
 /***********************************************************************/
 /* get_mui - Acquire an MUI module for the associated resource         */
@@ -1222,7 +1228,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     return rsrc;
 
 }
-/* MUI End   */
+/* MUI End   */ 
 
 
 /**********************************************************************
@@ -1241,7 +1247,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeResource( HGLOBAL handle )
 {
     return FALSE;
 }
-
 
 /* MUI Start */
 /**********************************************************************
