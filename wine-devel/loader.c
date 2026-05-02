@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (18 April, 2026)                          */
+/* Craig Schulstad - Horace, ND  USA (2 May, 2026)                             */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  11.7                                               */
+/* Version being enhanced:  11.8                                               */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -1092,6 +1092,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     return ret;
 }
 
+
 /* MUI Start */
 /***********************************************************************/
 /* get_mui - Acquire an MUI module for the associated resource         */
@@ -1119,6 +1120,8 @@ HMODULE get_mui(HMODULE module)
         RegQueryValueExW( intl_key, L"LocaleName", NULL, NULL, (BYTE *)mui_locale, &count );
         TRACE("Locale name: %s\n", debugstr_w(mui_locale));
     }
+	
+    SetLastError(save_error);
 
     last_slash = wcsrchr(module_name, L'\\');
 
@@ -1228,7 +1231,7 @@ HRSRC WINAPI DECLSPEC_HOTPATCH FindResourceExW( HMODULE module, LPCWSTR type, LP
     return rsrc;
 
 }
-/* MUI End   */ 
+/* MUI End   */
 
 
 /**********************************************************************
