@@ -23,14 +23,14 @@
 /*******************************************************************************/
 /* Modification and Enhancement Narrative                                      */
 /*                                                                             */
-/* Craig Schulstad - Horace, ND  USA (1 July, 2026)                            */
+/* Craig Schulstad - Horace, ND  USA (11 July, 2026)                           */
 /*                                                                             */
 /* This program has been revised to reactively acquire an MUI file reference   */
 /* to be used by the various resource fetch functions.  Without these code     */
 /* changes, no MUI reference was found and the calling program was falling     */
 /* back to the "exe" file for information.                                     */
 /*                                                                             */
-/* Version being enhanced:  11.12                                              */
+/* Version being enhanced:  11.13                                              */
 /*                                                                             */
 /* The following function calls were added:                                    */
 /*   get_mui (Attempts to locate and retrieve an MUI file)                     */
@@ -1092,6 +1092,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH EnumResourceTypesExW( HMODULE module, ENUMRESTYPEP
     return ret;
 }
 
+
 /* MUI Start */
 /***********************************************************************/
 /* get_mui - Acquire an MUI module for the associated resource         */
@@ -1281,6 +1282,7 @@ HGLOBAL WINAPI DECLSPEC_HOTPATCH LoadResource( HINSTANCE module, HRSRC rsrc )
 
 }
 /* MUI End   */
+
 
 /**********************************************************************
  *	    LockResource     (kernelbase.@)
